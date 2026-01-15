@@ -2623,7 +2623,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1331987034
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2766,7 +2766,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2c48464ff96f51b4dac89ffaa38f661b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  passengerPrefab: {fileID: 5457874681887944158, guid: 600b901826d48c74aa42357018dba2ac, type: 3}
+  normalPassengerPrefabs:
+  - {fileID: 5457874681887944158, guid: 600b901826d48c74aa42357018dba2ac, type: 3}
+  - {fileID: 5457874681887944158, guid: 56e045d4c1a635e40a7d900317185569, type: 3}
+  - {fileID: 5457874681887944158, guid: ed7dacc5371d57b4bbe19dc28a632deb, type: 3}
+  anomalyPassengerPrefabs:
+  - {fileID: 5457874681887944158, guid: 37326ba9330c3a34f92f96757f0f421d, type: 3}
+  - {fileID: 5457874681887944158, guid: 20cc277f2e06e124f853bf5440d04934, type: 3}
+  - {fileID: 5457874681887944158, guid: 71ffd69a452bec145ad316874cea533c, type: 3}
+  anomalyChance: 0.15
   spawnRoot: {fileID: 1689127275}
   spawnDistanceOnSpline: 4
   defaultSpawnPerStop: 3
