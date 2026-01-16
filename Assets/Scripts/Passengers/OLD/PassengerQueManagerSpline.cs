@@ -2,14 +2,18 @@
 //using UnityEngine;
 //using UnityEngine.Splines;
 
-//public sealed class PassengerQueueManager : MonoBehaviour
+//public sealed class PassengerQueueManagerSpline : MonoBehaviour
 //{
-//    [Header("Spline path (aisle/queue path)")]
+//    [Header("Boarding spline (outside -> door -> just inside)")]
 //    [SerializeField] private SplineContainer path;
 
 //    [Header("Queue slots (meters along spline)")]
-//    [Tooltip("Slot 0 is the FRONT of the queue. These are distances along the spline in meters.")]
-//    [SerializeField] private float[] slotDistances = { 0.5f, 1.3f, 2.1f, 2.9f };
+//    [Tooltip("Slot 0 = FRONT at the door. Slot 1 behind them, etc.")]
+//    [SerializeField] private float[] slotDistances = { 0.35f, 0.25f, 0.15f, 0.05f };
+
+//    [Header("Spline direction")]
+//    [Tooltip("ON = distance increases as you move toward the door/front. OFF = distance increases away from the door (queue will flip).")]
+//    [SerializeField] private bool frontIsAtLargerDistance = true;
 
 //    [Header("Debug")]
 //    [SerializeField] private bool logAssignments = false;
@@ -17,9 +21,14 @@
 //    private readonly List<Passenger> queue = new();
 
 //    public int Count => queue.Count;
-//    public int Capacity => (slotDistances != null) ? slotDistances.Length : 0;
+//    public int Capacity => slotDistances != null ? slotDistances.Length : 0;
 //    public Passenger FrontPassenger => queue.Count > 0 ? queue[0] : null;
-//    public bool IsFull => Capacity > 0 && queue.Count >= Capacity;
+
+//    public bool IsFront(Passenger p) => p != null && queue.Count > 0 && queue[0] == p;
+
+//    public float FrontSlotDistance => (slotDistances != null && slotDistances.Length > 0)
+//        ? MapDistance(slotDistances[0])
+//        : 0f;
 
 //    public bool Enqueue(Passenger p, float spawnDistanceMeters)
 //    {
@@ -38,10 +47,7 @@
 //        }
 
 //        if (queue.Count >= slotDistances.Length)
-//        {
-//            if (logAssignments) Debug.Log("PassengerQueueManagerSpline: Queue is full.");
 //            return false;
-//        }
 
 //        if (queue.Contains(p))
 //            return true;
@@ -51,7 +57,8 @@
 //        PassengerSplineWalker w = p.GetComponent<PassengerSplineWalker>();
 //        if (w == null) w = p.gameObject.AddComponent<PassengerSplineWalker>();
 
-//        w.Init(path, spawnDistanceMeters);
+//        // Init ONCE when they enter the queue
+//        w.Init(path, MapDistance(spawnDistanceMeters));
 
 //        AssignTargets();
 //        return true;
@@ -73,26 +80,40 @@
 
 //    private void AssignTargets()
 //    {
+//        if (slotDistances == null || slotDistances.Length == 0) return;
+
 //        for (int i = 0; i < queue.Count; i++)
 //        {
 //            Passenger p = queue[i];
 //            if (p == null) continue;
 
-//            float target = slotDistances[Mathf.Min(i, slotDistances.Length - 1)];
+//            float rawTarget = slotDistances[Mathf.Min(i, slotDistances.Length - 1)];
+//            float targetDist = MapDistance(rawTarget);
 
 //            PassengerSplineWalker w = p.GetComponent<PassengerSplineWalker>();
 //            if (w == null) w = p.gameObject.AddComponent<PassengerSplineWalker>();
 
-//            // If someone added the walker but not initialised it yet, do it now from 0
-//            // (better than doing nothing)
-//           // w.Init(path, w.CurrentDistance);
-
-//            w.SetTargetDistance(target);
+//            w.enabled = true;
+//            w.SetTargetDistance(targetDist);
 
 //            if (logAssignments)
-//                Debug.Log($"SplineQueue: {p.name} -> slot {i} dist {target:0.00}m");
+//                Debug.Log($"Queue: {p.name} -> slot {i} at {targetDist:0.00}m (raw {rawTarget:0.00})");
 //        }
 //    }
 
-//    public bool IsFront(Passenger p) => p != null && queue.Count > 0 && queue[0] == p;
+//    // Maps “designer distances” to actual spline direction.
+//    // If your spline is reversed, this flips the distance along the spline length.
+//    private float MapDistance(float designerDistanceMeters)
+//    {
+//        if (path == null) return designerDistanceMeters;
+
+//        float len = path.CalculateLength();
+//        if (len <= 0f) return designerDistanceMeters;
+
+//        if (frontIsAtLargerDistance)
+//            return Mathf.Clamp(designerDistanceMeters, 0f, len);
+
+//        // Flip along spline if front is actually at SMALLER distance
+//        return Mathf.Clamp(len - designerDistanceMeters, 0f, len);
+//    }
 //}

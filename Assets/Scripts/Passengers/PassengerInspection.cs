@@ -10,7 +10,7 @@ public sealed class PassengerInspection : MonoBehaviour
 
     [Header("Refs")]
     [SerializeField] private PassengerInspectUI inspectUI;
-    [SerializeField] private PassengerQueueManagerSpline queueManager;
+    [SerializeField] private QueueManagerSpline queueManager;
     [SerializeField] private PassengerSpawner passengerSpawner;
 
     [Header("Debug")]
@@ -23,7 +23,7 @@ public sealed class PassengerInspection : MonoBehaviour
     {
         if (cam == null) cam = Camera.main;
         if (inspectUI == null) inspectUI = FindFirstObjectByType<PassengerInspectUI>();
-        if (queueManager == null) queueManager = FindFirstObjectByType<PassengerQueueManagerSpline>();
+        if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerSpline>();
         if (passengerSpawner == null) passengerSpawner = FindFirstObjectByType<PassengerSpawner>();
     }
 

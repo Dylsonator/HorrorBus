@@ -1,25 +1,24 @@
 using UnityEngine;
 using UnityEngine.Splines;
 
-public sealed class PassengerSplineWalker : MonoBehaviour
+public sealed class QueuedSplineWalker : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 1.4f;      // meters/sec
+    [SerializeField] private float maxSpeed = 1.4f;
+    [SerializeField] private float accel = 6f;
+    [SerializeField] private float decel = 10f;
     [SerializeField] private float rotateSpeed = 10f;
-    [SerializeField] private float arriveEpsilon = 0.03f; // meters
-    [SerializeField] private float retargetEpsilon = 0.005f; // when a “new target” is considered different
+    [SerializeField] private float arriveEpsilon = 0.03f;
 
     private SplineContainer path;
     private float pathLength = -1f;
 
     private float currentDist;
     private float targetDist;
+    private float speed;
     private bool hasTarget;
 
     public bool Arrived { get; private set; }
-
-    // Useful for debugging / UI if needed
     public float CurrentDistance => currentDist;
-    public float TargetDistance => targetDist;
 
     public void Init(SplineContainer spline, float startDistanceMeters)
     {
@@ -27,37 +26,27 @@ public sealed class PassengerSplineWalker : MonoBehaviour
         pathLength = (path != null) ? path.CalculateLength() : -1f;
 
         currentDist = Mathf.Max(0f, startDistanceMeters);
-        hasTarget = false;
-        Arrived = false;
+        targetDist = currentDist;
+        speed = 0f;
+
+        hasTarget = true;
+        Arrived = true;
 
         SnapToCurrent();
     }
 
     public void SetTargetDistance(float distanceMeters)
     {
-        float newTarget = Mathf.Max(0f, distanceMeters);
-
-        // If the “new” target is basically the same, don’t nuke Arrived.
-        if (hasTarget && Mathf.Abs(newTarget - targetDist) <= retargetEpsilon)
-            return;
-
-        targetDist = newTarget;
+        targetDist = Mathf.Max(0f, distanceMeters);
         hasTarget = true;
-
-        // Only mark not-arrived if we’re not already basically there.
-        Arrived = Mathf.Abs(targetDist - currentDist) <= arriveEpsilon;
-
-        if (Arrived)
-        {
-            currentDist = targetDist;
-            SnapToCurrent();
-        }
+        Arrived = false;
     }
 
     public void StopMoving()
     {
         hasTarget = false;
         Arrived = true;
+        speed = 0f;
         enabled = false;
     }
 
@@ -69,17 +58,28 @@ public sealed class PassengerSplineWalker : MonoBehaviour
         if (pathLength <= 0f) return;
 
         float delta = targetDist - currentDist;
+        float abs = Mathf.Abs(delta);
 
-        if (Mathf.Abs(delta) <= arriveEpsilon)
+        if (abs <= arriveEpsilon)
         {
             currentDist = targetDist;
+            speed = Mathf.MoveTowards(speed, 0f, decel * Time.deltaTime);
             Arrived = true;
             SnapToCurrent();
             return;
         }
 
-        float step = moveSpeed * Time.deltaTime;
-        currentDist += Mathf.Sign(delta) * Mathf.Min(Mathf.Abs(delta), step);
+        Arrived = false;
+
+        // accelerate towards max speed, decelerate a bit when close
+        float desiredSpeed = maxSpeed;
+        if (abs < 0.35f)
+            desiredSpeed = Mathf.Lerp(0.2f, maxSpeed, Mathf.Clamp01(abs / 0.35f));
+
+        speed = Mathf.MoveTowards(speed, desiredSpeed, accel * Time.deltaTime);
+
+        float step = speed * Time.deltaTime;
+        currentDist += Mathf.Sign(delta) * Mathf.Min(abs, step);
 
         SnapToCurrent();
     }
