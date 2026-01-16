@@ -11,6 +11,9 @@ public sealed class RouteStops : MonoBehaviour
     [SerializeField] private BusDrive busDrive;
     [SerializeField] private BusSlowDown slowDown; // optional
     [SerializeField] private PassengerSpawner passengerSpawner;
+    private bool stopTriggerArmed = true;
+
+    [SerializeField] private StopGate decisionGate;
 
     [Header("Stops (0..1 along spline)")]
     [SerializeField] private float[] stopTs = { 0.10f, 0.35f, 0.60f, 0.85f };
@@ -30,25 +33,47 @@ public sealed class RouteStops : MonoBehaviour
         if (busDrive == null) busDrive = GetComponent<BusDrive>();
         if (slowDown == null) slowDown = GetComponent<BusSlowDown>();
         if (passengerSpawner == null) passengerSpawner = GetComponentInChildren<PassengerSpawner>();
+        if (decisionGate == null) decisionGate = GetComponentInChildren<StopGate>();
+
     }
 
     private void Update()
     {
+
         if (busDrive == null || stopTs == null || stopTs.Length == 0)
             return;
 
-        if (waitingAtStop)
+        if (Keyboard.current != null && Keyboard.current[resumeKey].wasPressedThisFrame)
         {
-            if (Keyboard.current != null && Keyboard.current[resumeKey].wasPressedThisFrame)
-                ResumeFromStop();
-            return;
+            if (decisionGate != null && !decisionGate.CanDepart)
+            {
+                Debug.Log($"Cannot leave stop: {decisionGate.PendingCount} passenger(s) still need a decision.");
+                return;
+            }
+
+            ResumeFromStop();
         }
+
 
         float t = busDrive.NormalizedT;
         float targetStopT = stopTs[nextStopIndex];
 
-        if (IsWithinToleranceLooped(t, targetStopT, stopTolerance))
-            ArriveAtStopInternal();
+        bool inZone = IsWithinToleranceLooped(t, targetStopT, stopTolerance);
+
+        if (inZone)
+        {
+            if (stopTriggerArmed)
+            {
+                stopTriggerArmed = false;
+                ArriveAtStopInternal();
+            }
+        }
+        else
+        {
+            // re-arm only after we’ve moved away from the stop zone
+            stopTriggerArmed = true;
+        }
+
     }
 
     public float DistanceToNextStop
@@ -86,6 +111,9 @@ public sealed class RouteStops : MonoBehaviour
         // Passenger flow: people get off, then new people get on
         if (passengerSpawner != null)
         {
+            if (decisionGate != null)
+                decisionGate.ResetGate();
+
             passengerSpawner.DismissPassengersForStop(arrivedIndex);
             passengerSpawner.SpawnPassengers(arrivedIndex, stopCount);
         }

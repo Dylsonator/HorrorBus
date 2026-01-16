@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Xml;
 using UnityEngine;
 
 public sealed class PassengerSpawner : MonoBehaviour
@@ -9,6 +10,10 @@ public sealed class PassengerSpawner : MonoBehaviour
         public int stopIndex;
         public Transform[] spawnPoints;
     }
+    [Header("Stop gate")]
+    
+    [SerializeField] private StopGate decisionGate;
+
 
     [Header("Prefabs")]
     [SerializeField] private Passenger[] normalPassengerPrefabs;
@@ -53,6 +58,8 @@ public sealed class PassengerSpawner : MonoBehaviour
 
         if (debugLogs)
             Debug.Log($"[Spawner] Awake seats={seats?.Length ?? 0}");
+        if (decisionGate == null) decisionGate = FindFirstObjectByType<StopGate>();
+
     }
 
     public void SpawnPassengers(int currentStopIndex, int stopCount)
@@ -93,8 +100,20 @@ public sealed class PassengerSpawner : MonoBehaviour
 
             Passenger p = Instantiate(prefab, spawnPos, spawnRot);
 
+            if (decisionGate != null)
+                decisionGate.Register(p);
             if (nameGenerator != null)
                 p.SetPassengerName(nameGenerator.GenerateName(p.IsAnomaly));
+
+
+            // now randomise
+            var app = p.GetComponent<PassengerAppearance>();
+            if (app != null)
+            {
+                int seed = p.PassengerName.GetHashCode() ^ Random.Range(int.MinValue, int.MaxValue);
+                app.Randomize(seed);
+            }
+
 
             int drop = PickFutureStop(currentStopIndex, stopCount);
             p.SetDropOffStopIndex(drop);
@@ -103,6 +122,10 @@ public sealed class PassengerSpawner : MonoBehaviour
             Passenger.StopInfoAccuracy accuracy;
             int claimedStops = PickClaimedStops(p, trueStops, stopCount, out accuracy);
             p.SetStopsInfo(trueStops, claimedStops, accuracy);
+            int expectedFare = fareTable.GetFare(claimedStops);
+            int paid = GeneratePaidAmount(expectedFare, p.IsAnomaly, accuracy);
+            p.SetFare(expectedFare, paid);
+
 
             // Walk to entry point in world-space, THEN join node-queue
             var join = p.GetComponent<PassengerJoinQueue>();
@@ -189,6 +212,9 @@ public sealed class PassengerSpawner : MonoBehaviour
 
         if (debugLogs)
             Debug.Log($"[Spawner] SEATED {p.PassengerName} on {seat.name}");
+        // Resolve decision: they've been handled
+        if (decisionGate != null)
+            decisionGate.Resolve(p);
 
         return true;
     }
@@ -203,6 +229,9 @@ public sealed class PassengerSpawner : MonoBehaviour
 
         activePassengers.Remove(p);
         seatedPassengers.Remove(p);
+        // Resolve decision: they've been handled
+        if (decisionGate != null)
+            decisionGate.Resolve(p);
 
         Destroy(p.gameObject);
 
@@ -216,14 +245,27 @@ public sealed class PassengerSpawner : MonoBehaviour
 
     private SeatAnchor FindFreeSeat()
     {
-        if (seats == null) return null;
+        if (seats == null || seats.Length == 0) return null;
+
+        // collect free seats
+        int freeCount = 0;
+        for (int i = 0; i < seats.Length; i++)
+            if (seats[i] != null && !seats[i].Occupied)
+                freeCount++;
+
+        if (freeCount == 0) return null;
+
+        // pick random free index
+        int pick = Random.Range(0, freeCount);
         for (int i = 0; i < seats.Length; i++)
         {
-            if (seats[i] != null && !seats[i].Occupied)
-                return seats[i];
+            if (seats[i] == null || seats[i].Occupied) continue;
+            if (pick-- == 0) return seats[i];
         }
+
         return null;
     }
+
 
     // ---------- Fixed spawn points helpers ----------
 
@@ -322,4 +364,33 @@ public sealed class PassengerSpawner : MonoBehaviour
         while (wrong == trueStops);
         return wrong;
     }
+    [Header("Fare")]
+    [SerializeField] private FareTable fareTable;
+
+    [SerializeField, Range(0f, 1f)] private float humanUnderpayChance = 0.08f;
+    [SerializeField, Range(0f, 1f)] private float anomalyWrongPayChance = 0.55f;
+
+    private int GeneratePaidAmount(int expected, bool isAnomaly, Passenger.StopInfoAccuracy accuracy)
+    {
+        if (!isAnomaly)
+        {
+            // humans mostly pay correct, sometimes +/- 1
+            if (Random.value < humanUnderpayChance)
+                return Mathf.Max(0, expected + (Random.value < 0.5f ? -1 : +1));
+            return expected;
+        }
+
+        // anomalies often pay wrong on purpose
+        if (Random.value < anomalyWrongPayChance)
+        {
+            int delta = Random.value < 0.5f ? -1 : +1;
+            int wrong = Mathf.Max(0, expected + delta);
+
+            if (wrong == expected) wrong = expected + 1;
+            return wrong;
+        }
+
+        return expected;
+    }
+
 }

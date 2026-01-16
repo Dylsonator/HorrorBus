@@ -16,7 +16,7 @@ public sealed class NameGenerator : MonoBehaviour
     {
         "Smith","Jones","Brown","Taylor","Williams","Davies","Evans","Wilson","Thomas","Johnson",
         "Roberts","Walker","Wright","Thompson","White","Hall","Green","King","Baker","Clarke",
-        "Fliski"
+        "Fliski", "Mikolajczyk"
 
     };
 
