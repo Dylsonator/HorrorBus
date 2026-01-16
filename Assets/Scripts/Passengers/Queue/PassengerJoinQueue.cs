@@ -1,172 +1,127 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public sealed class PassengerJoinQueue : MonoBehaviour
 {
-    [Header("Walk to reserved slot")]
+    [Header("Walk to entry")]
     [SerializeField] private float moveSpeed = 1.7f;
     [SerializeField] private float rotateSpeed = 10f;
-    [SerializeField] private float arriveDistance = 0.18f;
+    [SerializeField] private float arriveDistance = 0.55f;
 
-    [Header("Yield (stop and wait)")]
-    [Tooltip("Radius of the forward probe used to detect a blocker.")]
-    [SerializeField] private float probeRadius = 0.22f;
+    [Header("Entry spread")]
+    [SerializeField] private float entryOffsetRadius = 0.6f;
 
-    [Tooltip("How far ahead we check for a blocker (start slowing inside this).")]
-    [SerializeField] private float probeDistance = 0.9f;
-
-    [Tooltip("Hard stop if another passenger is within this distance in front.")]
-    [SerializeField] private float stopDistance = 0.45f;
-
-    [Tooltip("Resume moving when the blocker is at least this far away.")]
-    [SerializeField] private float resumeDistance = 0.60f;
-
-    [Tooltip("Only collide with passenger colliders (recommended: set passengers to a Passengers layer).")]
-    [SerializeField] private LayerMask passengerMask = ~0;
+    [Header("Join-point avoidance")]
+    [SerializeField] private bool waitIfBlocked = true;
+    [SerializeField] private float blockRadius = 0.55f;          // how close is "too close"
+    [SerializeField] private float blockCheckAhead = 0.8f;       // how far forward to check
+    [SerializeField] private LayerMask passengerLayerMask = ~0;  // set to Passenger layer for best results
 
     private Passenger passenger;
-    private QueueManagerSpline queue;
-    private float targetDistOnSpline;
+    private QueueManagerNodes queue;
+    private Transform entryPoint;
 
-    private bool active;
-    private bool releasedReservation;
-    private bool waiting; // hysteresis
+    private Vector3 entryOffset;
+    private bool offsetChosen;
 
-    private int reservedIndex;
-
-    public void Begin(Passenger p, QueueManagerSpline queueManager, int reservedIndexFromFront)
+    public void Begin(Passenger p, QueueManagerNodes q, Transform entry)
     {
         passenger = p;
-        queue = queueManager;
-        reservedIndex = reservedIndexFromFront;
-        targetDistOnSpline = queue.GetTargetDistanceForIndex(reservedIndex);
+        queue = q;
+        entryPoint = entry;
 
-        active = (passenger != null && queue != null);
-        enabled = active;
-
-        if (!active) return;
-
-        targetDistOnSpline = queue.GetTargetDistanceForIndex(reservedIndexFromFront);
+        offsetChosen = false;
+        enabled = (passenger != null && queue != null && entryPoint != null);
     }
 
     private void Update()
     {
-        if (!active || passenger == null || queue == null) return;
+        if (passenger == null || queue == null || entryPoint == null) return;
 
-        Vector3 target = queue.GetWorldPositionAtDistance(targetDistOnSpline);
+        if (!offsetChosen)
+        {
+            Vector2 r = Random.insideUnitCircle * entryOffsetRadius;
+            entryOffset = new Vector3(r.x, 0f, r.y);
+            offsetChosen = true;
+        }
+
         Vector3 pos = transform.position;
 
+        Vector3 target = entryPoint.position + entryOffset;
         target.y = pos.y;
 
-        Vector3 toTarget = target - pos;
-        toTarget.y = 0f;
+        Vector3 to = target - pos;
+        to.y = 0f;
 
-        float distToTarget = toTarget.magnitude;
-        if (distToTarget <= arriveDistance)
+        float dist = to.magnitude;
+
+        // Close enough: join queue system
+        if (dist <= arriveDistance)
         {
-            queue.EnqueueReserved(passenger, reservedIndex, targetDistOnSpline);
-            ReleaseOnce();
+            queue.AddToQueue(passenger);
             Destroy(this);
             return;
         }
 
-        Vector3 dir = toTarget.normalized;
+        Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : transform.forward;
 
-        float speedScale = ComputeYieldSpeedScale(pos, dir);
-
-        // Move
-        transform.position += dir * (moveSpeed * speedScale * Time.deltaTime);
-
-        // Rotate
-        if (dir.sqrMagnitude > 0.0001f)
+        // Simple "don't walk through someone" rule
+        if (waitIfBlocked && IsBlocked(pos, dir))
         {
-            Quaternion rot = Quaternion.LookRotation(dir, Vector3.up);
-            transform.rotation = Quaternion.Slerp(transform.rotation, rot, rotateSpeed * Time.deltaTime);
+            // Stop, rotate to face target
+            Face(dir);
+            return;
         }
+
+        transform.position += dir * (moveSpeed * Time.deltaTime);
+        Face(dir);
     }
 
-    private float ComputeYieldSpeedScale(Vector3 pos, Vector3 dir)
+    private bool IsBlocked(Vector3 pos, Vector3 dir)
     {
-        // Probe ahead for another passenger
-        Ray ray = new Ray(pos + Vector3.up * 0.05f, dir);
+        // Check for another passenger ahead in our movement direction
+        Vector3 origin = pos + Vector3.up * 0.5f;
+        Vector3 aheadPoint = origin + dir * blockCheckAhead;
 
-        // Use Collide so triggers still block if your passengers use trigger colliders
-        bool hit = Physics.SphereCast(
-            ray,
-            probeRadius,
-            out RaycastHit hitInfo,
-            probeDistance,
-            passengerMask,
-            QueryTriggerInteraction.Collide
-        );
+        Collider[] hits = Physics.OverlapSphere(aheadPoint, blockRadius, passengerLayerMask, QueryTriggerInteraction.Ignore);
 
-        if (!hit)
+        for (int i = 0; i < hits.Length; i++)
         {
-            waiting = false;
-            return 1f;
+            var c = hits[i];
+            if (c == null) continue;
+
+            // ignore self
+            if (c.transform == transform) continue;
+
+            var other = c.GetComponentInParent<Passenger>();
+            if (other == null) continue;
+            if (other == passenger) continue;
+
+            // Found another passenger ahead close enough -> blocked
+            return true;
         }
 
-        // Ignore self
-        if (hitInfo.collider != null && (hitInfo.collider.transform == transform || hitInfo.collider.transform.IsChildOf(transform)))
-        {
-            waiting = false;
-            return 1f;
-        }
-
-        // Only treat actual passengers as blockers
-        if (hitInfo.collider == null || hitInfo.collider.GetComponentInParent<Passenger>() == null)
-        {
-            waiting = false;
-            return 1f;
-        }
-
-        Passenger otherPassenger = hitInfo.collider.GetComponentInParent<Passenger>();
-        if (otherPassenger == null)
-        {
-            waiting = false;
-            return 1f;
-        }
-
-        // ✅ NEW: don't yield to people who are still trying to join the queue
-        if (otherPassenger.GetComponent<PassengerJoinQueue>() != null)
-        {
-            waiting = false;
-            return 1f;
-        }
-
-
-        float d = hitInfo.distance;
-
-        // Hysteresis: once waiting, keep waiting until we have enough space
-        if (waiting)
-        {
-            if (d >= resumeDistance)
-                waiting = false;
-            else
-                return 0f;
-        }
-
-        if (d <= stopDistance)
-        {
-            waiting = true;
-            return 0f;
-        }
-
-        // Slow down smoothly between stopDistance and probeDistance
-        float t = Mathf.InverseLerp(stopDistance, probeDistance, d);
-        return Mathf.Clamp01(t);
+        return false;
     }
 
-    private void OnDestroy()
+    private void Face(Vector3 dir)
     {
-        ReleaseOnce();
+        dir.y = 0f;
+        if (dir.sqrMagnitude <= 0.0001f) return;
+
+        Quaternion rot = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        transform.rotation = Quaternion.Slerp(transform.rotation, rot, rotateSpeed * Time.deltaTime);
     }
 
-    private void ReleaseOnce()
+#if UNITY_EDITOR
+    private void OnDrawGizmosSelected()
     {
-        if (releasedReservation) return;
-        releasedReservation = true;
+        if (!waitIfBlocked) return;
+        Gizmos.color = new Color(1f, 0.6f, 0.1f, 0.25f);
 
-        if (queue != null)
-            queue.ReleaseReservation();
+        Vector3 pos = transform.position + Vector3.up * 0.5f;
+        Vector3 dir = transform.forward;
+        Vector3 p = pos + dir * blockCheckAhead;
+        Gizmos.DrawSphere(p, blockRadius);
     }
+#endif
 }

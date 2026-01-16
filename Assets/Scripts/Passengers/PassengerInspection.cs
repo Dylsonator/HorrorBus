@@ -10,20 +10,20 @@ public sealed class PassengerInspection : MonoBehaviour
 
     [Header("Refs")]
     [SerializeField] private PassengerInspectUI inspectUI;
-    [SerializeField] private QueueManagerSpline queueManager;
+    [SerializeField] private QueueManagerNodes queueManager;
     [SerializeField] private PassengerSpawner passengerSpawner;
 
     [Header("Debug")]
     [SerializeField] private bool debugLogs = true;
 
-    private Passenger lookTarget;         // who you're looking at (optional)
-    private Passenger selectedPassenger;  // who UI is showing (optional)
+    private Passenger lookTarget;
+    private Passenger selectedPassenger;
 
     private void Awake()
     {
         if (cam == null) cam = Camera.main;
         if (inspectUI == null) inspectUI = FindFirstObjectByType<PassengerInspectUI>();
-        if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerSpline>();
+        if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerNodes>();
         if (passengerSpawner == null) passengerSpawner = FindFirstObjectByType<PassengerSpawner>();
     }
 
@@ -34,7 +34,6 @@ public sealed class PassengerInspection : MonoBehaviour
         var kb = Keyboard.current;
         if (kb == null) return;
 
-        // E toggles UI
         if (kb.eKey.wasPressedThisFrame)
         {
             if (inspectUI == null || queueManager == null) return;
@@ -49,7 +48,7 @@ public sealed class PassengerInspection : MonoBehaviour
             Passenger target = GetBestTargetForInspect();
             if (target == null)
             {
-                if (debugLogs) Debug.Log("[Inspection] E -> no valid target (no front passenger).");
+                if (debugLogs) Debug.Log("[Inspection] E -> no valid target (queue empty).");
                 return;
             }
 
@@ -58,7 +57,6 @@ public sealed class PassengerInspection : MonoBehaviour
             if (debugLogs) Debug.Log($"[Inspection] UI OPEN for {selectedPassenger.PassengerName}");
         }
 
-        // 1 = Seat (NO LOOK REQUIRED)
         if (kb.digit1Key.wasPressedThisFrame || kb.numpad1Key.wasPressedThisFrame)
         {
             Passenger target = GetBestTargetForDecision();
@@ -71,18 +69,11 @@ public sealed class PassengerInspection : MonoBehaviour
             if (passengerSpawner == null) return;
 
             bool ok = passengerSpawner.SeatPassenger(target);
-            Debug.Log(ok
-                ? $"[Inspection] SEAT OK: {target.PassengerName}"
-                : $"[Inspection] SEAT FAIL: {target.PassengerName} (see spawner logs)");
+            if (debugLogs) Debug.Log(ok ? $"[Inspection] SEAT OK: {target.PassengerName}" : $"[Inspection] SEAT FAIL: {target.PassengerName}");
 
-            if (ok)
-            {
-                if (inspectUI != null && inspectUI.IsVisible) inspectUI.Hide();
-                selectedPassenger = null;
-            }
+            if (ok) CleanupAfterDecision(target);
         }
 
-        // 2 = Dismiss (NO LOOK REQUIRED)
         if (kb.digit2Key.wasPressedThisFrame || kb.numpad2Key.wasPressedThisFrame)
         {
             Passenger target = GetBestTargetForDecision();
@@ -95,22 +86,27 @@ public sealed class PassengerInspection : MonoBehaviour
             if (passengerSpawner == null) return;
 
             bool ok = passengerSpawner.DismissPassenger(target);
-            Debug.Log(ok
-                ? $"[Inspection] DISMISS OK: {target.PassengerName}"
-                : $"[Inspection] DISMISS FAIL: {target.PassengerName} (see spawner logs)");
+            if (debugLogs) Debug.Log(ok ? $"[Inspection] DISMISS OK: {target.PassengerName}" : $"[Inspection] DISMISS FAIL: {target.PassengerName}");
 
-            if (ok)
-            {
-                if (inspectUI != null && inspectUI.IsVisible) inspectUI.Hide();
-                selectedPassenger = null;
-            }
+            if (ok) CleanupAfterDecision(target);
         }
+    }
+
+    private void CleanupAfterDecision(Passenger decided)
+    {
+        if (inspectUI != null && inspectUI.IsVisible) inspectUI.Hide();
+        selectedPassenger = null;
+
+        if (queueManager != null)
+            queueManager.Remove(decided);
+
+        var walker = decided != null ? decided.GetComponent<NodeQueueWalker>() : null;
+        if (walker != null)
+            walker.StopMoving();
     }
 
     private Passenger GetBestTargetForDecision()
     {
-        // Prefer whoever is currently selected (if they’re still front),
-        // otherwise use front passenger.
         if (queueManager == null) return null;
 
         Passenger front = queueManager.FrontPassenger;
@@ -129,11 +125,9 @@ public sealed class PassengerInspection : MonoBehaviour
         Passenger front = queueManager.FrontPassenger;
         if (front == null) return null;
 
-        // If you’re looking at the front passenger, inspect them.
         if (lookTarget != null && lookTarget == front)
             return lookTarget;
 
-        // Otherwise inspect front anyway.
         return front;
     }
 

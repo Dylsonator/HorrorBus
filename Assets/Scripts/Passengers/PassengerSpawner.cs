@@ -19,8 +19,8 @@ public sealed class PassengerSpawner : MonoBehaviour
     [SerializeField] private StopSpawnSet[] stopSpawnSets;
     [SerializeField] private Transform[] fallbackSpawnPoints;
 
-    [Header("Joining the queue")]
-    [SerializeField] private QueueManagerSpline queueManager;
+    [Header("Queue")]
+    [SerializeField] private QueueManagerNodes queueManager;
     [SerializeField] private Transform queueEntryPoint;
 
     [Header("Spawn count")]
@@ -45,7 +45,7 @@ public sealed class PassengerSpawner : MonoBehaviour
 
     private void Awake()
     {
-        if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerSpline>();
+        if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerNodes>();
         if (nameGenerator == null) nameGenerator = FindFirstObjectByType<NameGenerator>();
 
         if (seats == null || seats.Length == 0)
@@ -59,19 +59,19 @@ public sealed class PassengerSpawner : MonoBehaviour
     {
         if (queueManager == null)
         {
-            Debug.LogWarning("PassengerSpawner: No QueueManagerSpline assigned.");
+            Debug.LogWarning("[Spawner] No QueueManagerNodes assigned.");
             return;
         }
 
         if (queueEntryPoint == null)
         {
-            Debug.LogWarning("PassengerSpawner: No queueEntryPoint assigned.");
+            Debug.LogWarning("[Spawner] No queueEntryPoint assigned.");
             return;
         }
 
         if (stopCount < 2)
         {
-            Debug.LogWarning("PassengerSpawner: stopCount must be >= 2.");
+            Debug.LogWarning("[Spawner] stopCount must be >= 2.");
             return;
         }
 
@@ -83,7 +83,7 @@ public sealed class PassengerSpawner : MonoBehaviour
             Passenger prefab = PickPrefab();
             if (prefab == null)
             {
-                Debug.LogWarning("PassengerSpawner: No prefabs configured.");
+                Debug.LogWarning("[Spawner] No prefabs configured.");
                 return;
             }
 
@@ -104,18 +104,13 @@ public sealed class PassengerSpawner : MonoBehaviour
             int claimedStops = PickClaimedStops(p, trueStops, stopCount, out accuracy);
             p.SetStopsInfo(trueStops, claimedStops, accuracy);
 
-            // Walk to entry, then enqueue at a good "back of line" distance
-            int idx = queueManager.ReserveIndex();
-
+            // Walk to entry point in world-space, THEN join node-queue
             var join = p.GetComponent<PassengerJoinQueue>();
             if (join == null) join = p.gameObject.AddComponent<PassengerJoinQueue>();
 
-            join.Begin(p, queueManager, idx);
-
+            join.Begin(p, queueManager, queueEntryPoint);
 
             activePassengers.Add(p);
-
-   
         }
     }
 
@@ -163,18 +158,18 @@ public sealed class PassengerSpawner : MonoBehaviour
             return false;
         }
 
-        // Remove from queue first
+        // Remove from queue so others advance
         queueManager.Remove(p);
 
-        // Stop any queue movement scripts
+        // Remove join behaviour
         var join = p.GetComponent<PassengerJoinQueue>();
-
         if (join != null) Destroy(join);
 
-        var walker = p.GetComponent<QueuedSplineWalker>();
+        // Stop queue walker (node version)
+        var walker = p.GetComponent<NodeQueueWalker>();
         if (walker != null) walker.StopMoving();
 
-        // Physics off
+        // Physics off (optional, if you use RBs)
         var rb = p.GetComponent<Rigidbody>();
         if (rb != null)
         {
@@ -202,10 +197,13 @@ public sealed class PassengerSpawner : MonoBehaviour
     {
         if (p == null) return false;
 
+        // Remove from queue first (safe if they weren't queued)
         if (queueManager != null)
             queueManager.Remove(p);
 
         activePassengers.Remove(p);
+        seatedPassengers.Remove(p);
+
         Destroy(p.gameObject);
 
         if (debugLogs)
