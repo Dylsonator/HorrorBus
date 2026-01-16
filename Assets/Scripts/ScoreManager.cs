@@ -14,6 +14,5 @@ public sealed class ScoreManager : MonoBehaviour
     public void Set(int value)
     {
         score = value;
-        _textMeshPro.text = ($"[SCORE] -> {score}");
     }
 }
