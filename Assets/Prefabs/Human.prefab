@@ -562,12 +562,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   passengerName: Bob
+  dateOfBirth: 
+  idNumber: 
+  expiryDate: 
   isAnomaly: 0
   dropOffStopIndex: -1
   stopsInfoA: 0
   stopsInfoB: 0
   stopsInfoAccuracy: 2
   Head: {fileID: 8937809072965786247}
+  idVisual: 0
+  debugObservation: 0
 --- !u!114 &1416691431771069570
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -832,7 +837,7 @@ GameObject:
   - component: {fileID: 1109906583327926868}
   - component: {fileID: 5390284413992064477}
   - component: {fileID: 2338000776203735873}
-  - component: {fileID: 3304265888661981322}
+  - component: {fileID: 8311546006193062169}
   m_Layer: 15
   m_Name: Sphere
   m_TagString: Untagged
@@ -908,8 +913,8 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!135 &3304265888661981322
-SphereCollider:
+--- !u!136 &8311546006193062169
+CapsuleCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -926,6 +931,8 @@ SphereCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 3
+  serializedVersion: 2
   m_Radius: 0.5
-  m_Center: {x: -5.551115e-17, y: 0.00000023841855, z: 0}
+  m_Height: 4.977041
+  m_Direction: 1
+  m_Center: {x: -1.3299836e-10, y: -1.9211023, z: 0}
