@@ -27,11 +27,11 @@ public class AnomalyController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float killChanceHigh = 0.12f;
 
     [Header("Cooldowns")]
-    [SerializeField] private float actionCooldownSeconds = 5f; // any action
-    [SerializeField] private float killCooldownSeconds = 20f;  // kills specifically
+    [SerializeField] private float actionCooldownSeconds = 5f;
+    [SerializeField] private float killCooldownSeconds = 20f;
 
     [Header("Limits (optional safety)")]
-    [SerializeField] private int maxKillsPerAnomaly = 2;       // set 0 for unlimited
+    [SerializeField] private int maxKillsPerAnomaly = 2;
 
     [Header("Only act while bus moving")]
     [SerializeField] private bool onlyActWhileBusMoving = true;
@@ -39,7 +39,6 @@ public class AnomalyController : MonoBehaviour
     [SerializeField] private RouteStops routeStops;
     [SerializeField] private float movingSpeedThreshold = 0.05f;
 
-    // Internal state
     private bool wasObserved;
     private bool pendingSlip;
     private float slipTimer;
@@ -48,6 +47,8 @@ public class AnomalyController : MonoBehaviour
     private float killCooldownTimer;
     private int killsDone;
 
+    public AnomalySkill Skill => skill;
+
     private void Awake()
     {
         if (passenger == null) passenger = GetComponent<Passenger>();
@@ -55,19 +56,20 @@ public class AnomalyController : MonoBehaviour
         if (busDrive == null) busDrive = FindFirstObjectByType<BusDrive>();
         if (routeStops == null) routeStops = FindFirstObjectByType<RouteStops>();
 
-        if (randomiseSkillOnSpawn && passenger != null && passenger.IsAnomaly)
+        if (passenger != null && passenger.IsAnomaly && randomiseSkillOnSpawn)
             AssignRandomSkill();
+
+        AssignIdVisualBySkill();
     }
 
-    // Optional: lets your spawner force a skill
     public void SetSkill(AnomalySkill newSkill)
     {
         skill = newSkill;
+        AssignIdVisualBySkill();
     }
 
     private void AssignRandomSkill()
     {
-        // Normalise weights safely (so you can type anything in inspector)
         float low = Mathf.Max(0f, skillChanceLow);
         float mid = Mathf.Max(0f, skillChanceMid);
         float high = Mathf.Max(0f, skillChanceHigh);
@@ -76,7 +78,8 @@ public class AnomalyController : MonoBehaviour
         if (total <= 0f)
         {
             skill = AnomalySkill.Mid;
-            Debug.Log($"[ANOMALY] {passenger.PassengerName} assigned skill {skill} (fallback, weights were zero)");
+            if (passenger != null)
+                Debug.Log($"[ANOMALY] {passenger.PassengerName} assigned skill {skill} (fallback, weights were zero)");
             return;
         }
 
@@ -86,7 +89,39 @@ public class AnomalyController : MonoBehaviour
         else if (r < low + mid) skill = AnomalySkill.Mid;
         else skill = AnomalySkill.High;
 
-        Debug.Log($"[ANOMALY] {passenger.PassengerName} assigned skill {skill}");
+        if (passenger != null)
+            Debug.Log($"[ANOMALY] {passenger.PassengerName} assigned skill {skill}");
+    }
+
+    private void AssignIdVisualBySkill()
+    {
+        if (passenger == null)
+            return;
+
+        if (!passenger.IsAnomaly)
+        {
+            passenger.SetIdVisual(PassengerIdVisual.Real);
+            return;
+        }
+
+        switch (skill)
+        {
+            case AnomalySkill.Low:
+                passenger.SetIdVisual(PassengerIdVisual.ObviousFake);
+                break;
+
+            case AnomalySkill.Mid:
+                passenger.SetIdVisual((PassengerIdVisual)Random.Range(2, 5)); // FakeAlt1..FakeAlt3
+                break;
+
+            case AnomalySkill.High:
+                passenger.SetIdVisual(PassengerIdVisual.Real);
+                break;
+
+            default:
+                passenger.SetIdVisual(PassengerIdVisual.Real);
+                break;
+        }
     }
 
     private void Update()
@@ -96,22 +131,17 @@ public class AnomalyController : MonoBehaviour
 
         if (onlyActWhileBusMoving && !IsBusMovingNow())
         {
-            // Important: cancel any pending countdown so it can't "finish" at a stop
             pendingSlip = false;
             slipTimer = 0f;
-
-            // Keep this consistent for your observed->unobserved transition logic
             wasObserved = passenger.IsObserved;
             return;
         }
 
-        // Tick cooldowns
         actionCooldownTimer -= Time.deltaTime;
         killCooldownTimer -= Time.deltaTime;
 
         bool observed = passenger.IsObserved;
 
-        // Observed: freeze deception + cancel pending countdown
         if (observed)
         {
             pendingSlip = false;
@@ -120,21 +150,18 @@ public class AnomalyController : MonoBehaviour
             return;
         }
 
-        // Only allow starting a countdown if we're not on action cooldown
         if (actionCooldownTimer > 0f)
         {
             wasObserved = false;
             return;
         }
 
-        // Start delayed attempt when we transition observed -> unobserved
         if (wasObserved && !pendingSlip)
         {
             pendingSlip = true;
             slipTimer = profile.PickDelay(skill);
         }
 
-        // Countdown only while unobserved
         if (pendingSlip)
         {
             slipTimer -= Time.deltaTime;
@@ -143,11 +170,8 @@ public class AnomalyController : MonoBehaviour
             {
                 bool didAnything = TryActOnce();
 
-                // If something happened, start cooldown
                 if (didAnything)
-                {
                     actionCooldownTimer = actionCooldownSeconds;
-                }
 
                 pendingSlip = false;
                 slipTimer = 0f;
@@ -159,7 +183,6 @@ public class AnomalyController : MonoBehaviour
 
     private bool TryActOnce()
     {
-        // 1) Sometimes kill (main goal), but not always
         if (CanAttemptKill(out Passenger victim))
         {
             float chance = GetKillChanceBySkill();
@@ -169,21 +192,18 @@ public class AnomalyController : MonoBehaviour
                 {
                     killsDone++;
                     killCooldownTimer = killCooldownSeconds;
-
-                    // After-kill reaction: nearby humans avert gaze, anomaly looks "innocent"
                     AnomalyGazeReaction.TriggerAfterKill(passenger, radius: 7f, minReactors: 1, maxReactors: 2);
-
                     return true;
                 }
             }
         }
 
-        // 2) Otherwise non-lethal action from profile (retry a bit)
         const int retries = 3;
         for (int i = 0; i < retries; i++)
         {
-            var chosen = profile.PickAction();
-            if (chosen == null) break;
+            AnomalyActionBase chosen = profile.PickAction();
+            if (chosen == null)
+                break;
 
             if (chosen.TryExecute(this, passenger))
                 return true;
@@ -223,7 +243,7 @@ public class AnomalyController : MonoBehaviour
             return false;
 
         if (busDrive == null)
-            return true; // fail-open if not wired
+            return true;
 
         if (busDrive.IsPaused)
             return false;

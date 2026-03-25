@@ -13,7 +13,6 @@ public sealed class PurgeManager : MonoBehaviour
     [SerializeField] private ScoreManager score;
     [SerializeField] private int purgePenaltyPoints = 50;
 
-
     private float cooldown;
 
     private void Update()
@@ -24,7 +23,8 @@ public sealed class PurgeManager : MonoBehaviour
 
     public void TryPurge()
     {
-        if (cooldown > 0f) return;
+        if (cooldown > 0f)
+            return;
 
         StartCoroutine(PurgeRoutine());
         cooldown = cooldownSeconds;
@@ -32,14 +32,11 @@ public sealed class PurgeManager : MonoBehaviour
 
     private IEnumerator PurgeRoutine()
     {
-        // 1) Close door
         if (purgeDoor != null)
             purgeDoor.Close();
 
-        // 2) Purge seated passengers immediately
         ExecutePurge();
 
-        // 3) Wait, then reopen
         yield return new WaitForSeconds(doorReopenDelay);
 
         if (purgeDoor != null)
@@ -48,16 +45,21 @@ public sealed class PurgeManager : MonoBehaviour
 
     private void ExecutePurge()
     {
-        var passengers = FindObjectsOfType<Passenger>(true);
+        Passenger[] passengers = FindObjectsByType<Passenger>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
-        foreach (var p in passengers)
+        foreach (Passenger p in passengers)
         {
-            if (p == null) continue;
+            if (p == null)
+                continue;
 
-            // ONLY seated passengers
             if (p.GetComponentInParent<SeatAnchor>() == null)
                 continue;
-            if (score != null) score.Add(-purgePenaltyPoints);
+
+            if (SeatManager.Instance != null)
+                SeatManager.Instance.NotifyPassengerRemoved(p);
+
+            if (score != null)
+                score.Add(-purgePenaltyPoints);
 
             Destroy(p.gameObject);
         }
