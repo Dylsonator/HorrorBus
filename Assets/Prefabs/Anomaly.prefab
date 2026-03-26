@@ -573,7 +573,11 @@ MonoBehaviour:
   stopsInfoAccuracy: 2
   Head: {fileID: 8937809072965786247}
   idVisual: 0
-  debugObservation: 0
+  isSeatedPassenger: 0
+  hasBeenProcessed: 0
+  hasBeenInspectedBefore: 0
+  speechStyle: 0
+  disableWhenSeated: []
 --- !u!114 &1416691431771069570
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -960,11 +964,11 @@ CapsuleCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 1
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.5
+  m_Radius: 0.5410986
   m_Height: 5.250505
   m_Direction: 1
-  m_Center: {x: 4.9572374e-11, y: -2.1063607, z: 0}
+  m_Center: {x: 4.9572374e-11, y: -2.1063607, z: 0.041098595}

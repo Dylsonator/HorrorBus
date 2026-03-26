@@ -11,20 +11,24 @@ public enum PassengerIdVisual
 
 public enum PassengerQuestionType
 {
-    BoardingStop,
+    CurrentStop,
     DestinationStop,
     Seat,
     Fare
 }
 
-public enum PassengerSpeechStyle
+public enum PassengerPaymentMethod
 {
-    Auto,
-    Reserved,
-    Polite,
-    Casual,
-    Nervous,
-    Blunt
+    Cash,
+    DayRider
+}
+
+public enum PassengerTicketState
+{
+    None,
+    Valid,
+    Old,
+    Fake
 }
 
 public class Passenger : MonoBehaviour
@@ -65,14 +69,17 @@ public class Passenger : MonoBehaviour
     [SerializeField] private bool hasBeenProcessed;
     [SerializeField] private bool hasBeenInspectedBefore;
 
-    [Header("Speech")]
-    [SerializeField] private PassengerSpeechStyle speechStyle = PassengerSpeechStyle.Auto;
+    [Header("Payment")]
+    [SerializeField] private PassengerPaymentMethod paymentMethod = PassengerPaymentMethod.Cash;
+    [SerializeField] private PassengerTicketState ticketState = PassengerTicketState.None;
+    [SerializeField] private string ticketLabel = "";
+    [SerializeField] private string ticketDateLabel = "";
+    [SerializeField] private int[] tenderedDenominations = System.Array.Empty<int>();
 
     [Header("Disable These When Seated")]
     [SerializeField] private MonoBehaviour[] disableWhenSeated;
 
     private bool lastObserved;
-    private PassengerSpeechStyle resolvedSpeechStyle = PassengerSpeechStyle.Reserved;
 
     public bool IsAnomaly => isAnomaly;
     public int DropOffStopIndex => dropOffStopIndex;
@@ -88,9 +95,15 @@ public class Passenger : MonoBehaviour
     public bool IsSeatedPassenger => isSeatedPassenger;
     public bool HasBeenProcessed => hasBeenProcessed;
     public bool HasBeenInspectedBefore => hasBeenInspectedBefore;
+    public PassengerPaymentMethod PaymentMethod => paymentMethod;
+    public PassengerTicketState TicketState => ticketState;
     public int ExpectedFare { get; private set; }
     public int PaidAmount { get; private set; }
-    public PassengerSpeechStyle SpeechStyle => resolvedSpeechStyle;
+    public bool UsesCash => paymentMethod == PassengerPaymentMethod.Cash;
+    public bool UsesDayRider => paymentMethod == PassengerPaymentMethod.DayRider;
+    public bool IsDayRiderValid => ticketState == PassengerTicketState.Valid;
+    public int CashTenderedPence => SumTendered();
+    public int ChangeDuePence => UsesCash ? Mathf.Max(0, CashTenderedPence - ExpectedFare) : 0;
 
     private void OnEnable()
     {
@@ -108,7 +121,6 @@ public class Passenger : MonoBehaviour
             Head = transform;
 
         EnsureIdData();
-        ResolveSpeechStyle();
     }
 
     private void Update()
@@ -120,12 +132,7 @@ public class Passenger : MonoBehaviour
         }
     }
 
-    public void SetPassengerName(string newName)
-    {
-        passengerName = newName;
-        ResolveSpeechStyle();
-    }
-
+    public void SetPassengerName(string newName) => passengerName = newName;
     public void SetDropOffStopIndex(int index) => dropOffStopIndex = index;
 
     public void SetStopsInfo(int valueA, int valueB, StopInfoAccuracy accuracy)
@@ -135,34 +142,13 @@ public class Passenger : MonoBehaviour
         stopsInfoAccuracy = accuracy;
     }
 
-    public void SetIsAnomaly(bool value)
-    {
-        isAnomaly = value;
-        ResolveSpeechStyle();
-    }
-
-    public void SetFare(int expected, int paid)
-    {
-        ExpectedFare = Mathf.Max(0, expected);
-        PaidAmount = Mathf.Max(0, paid);
-    }
-
+    public void SetIsAnomaly(bool value) => isAnomaly = value;
     public void SetIdVisual(PassengerIdVisual visual) => idVisual = visual;
-
-    public void SetDateOfBirth(string value)
-    {
-        dateOfBirth = value;
-    }
-
-    public void SetIdNumber(string value)
-    {
-        idNumber = value;
-    }
-
-    public void SetExpiryDate(string value)
-    {
-        expiryDate = value;
-    }
+    public void SetDateOfBirth(string value) => dateOfBirth = value;
+    public void SetIdNumber(string value) => idNumber = value;
+    public void SetExpiryDate(string value) => expiryDate = value;
+    public void SetExpectedFare(int pence) => ExpectedFare = Mathf.Max(0, pence);
+    public void SetPaidAmount(int pence) => PaidAmount = Mathf.Max(0, pence);
 
     public void SetVisibleIdentity(string visibleName, string dob, string number, string expiry)
     {
@@ -170,33 +156,63 @@ public class Passenger : MonoBehaviour
         dateOfBirth = dob;
         idNumber = number;
         expiryDate = expiry;
-        EnsureIdData();
-        ResolveSpeechStyle();
     }
 
-    public void CopyVisibleIdentityFrom(Passenger other, bool copyCardVisual = false)
+    public void CopyVisibleIdentityFrom(Passenger other)
     {
-        if (other == null)
+        if (other == null || other == this)
             return;
 
         SetVisibleIdentity(other.PassengerName, other.DateOfBirth, other.IdNumber, other.ExpiryDate);
-
-        if (copyCardVisual)
-            idVisual = other.IdVisual;
     }
+
+    public void SetFare(int expected, int paid)
+    {
+        int cleanExpected = Mathf.Max(0, expected);
+        int cleanPaid = Mathf.Max(0, paid);
+
+        if (cleanPaid <= 0)
+            cleanPaid = cleanExpected;
+
+        SetCashPayment(cleanExpected, new[] { cleanPaid });
+    }
+
+    public void SetCashPayment(int expectedFare, int[] denominations)
+    {
+        paymentMethod = PassengerPaymentMethod.Cash;
+        ticketState = PassengerTicketState.None;
+        ticketLabel = string.Empty;
+        ticketDateLabel = string.Empty;
+        ExpectedFare = Mathf.Max(0, expectedFare);
+        tenderedDenominations = CopyArray(denominations);
+        PaidAmount = CashTenderedPence;
+    }
+
+    public void SetDayRiderPayment(int expectedFare, bool valid, bool oldTicket, bool fakeTicket, string dateText)
+    {
+        paymentMethod = PassengerPaymentMethod.DayRider;
+        ticketState = fakeTicket ? PassengerTicketState.Fake : (oldTicket ? PassengerTicketState.Old : (valid ? PassengerTicketState.Valid : PassengerTicketState.None));
+        ticketLabel = "DayRider";
+        ticketDateLabel = dateText;
+        ExpectedFare = Mathf.Max(0, expectedFare);
+        tenderedDenominations = System.Array.Empty<int>();
+        PaidAmount = 0;
+    }
+
+    public int[] GetTenderedDenominationsCopy() => CopyArray(tenderedDenominations);
 
     public void MarkProcessed(bool seated)
     {
         hasBeenProcessed = true;
         isSeatedPassenger = seated;
 
-        if (seated)
+        if (!seated || disableWhenSeated == null)
+            return;
+
+        for (int i = 0; i < disableWhenSeated.Length; i++)
         {
-            for (int i = 0; i < disableWhenSeated.Length; i++)
-            {
-                if (disableWhenSeated[i] != null)
-                    disableWhenSeated[i].enabled = false;
-            }
+            if (disableWhenSeated[i] != null)
+                disableWhenSeated[i].enabled = false;
         }
     }
 
@@ -226,112 +242,92 @@ public class Passenger : MonoBehaviour
         if (!firstInspect)
             return GetStandingRepeatLine();
 
-        string destination = GetDestinationName();
-        int stops = ClaimedStopsRemaining;
-        int paid = PaidAmount;
+        string destination = GetPublicDestinationName();
 
-        if (!IsAnomaly)
+        if (UsesDayRider)
         {
-            if (PaidAmount == ExpectedFare)
+            if (!IsAnomaly)
             {
-                return Say(
-                    $"I'm heading to {destination}. That's {stops} stop(s). Here's {paid}.",
-                    $"{destination}. {stops} stop(s) to go. Here's {paid}.",
-                    $"I'm getting off at {destination}. I've got {paid} here.",
-                    $"{destination}, {stops} stop(s). Here you go — {paid}.",
-                    $"Going to {destination}. {stops} stop(s) left. I've got {paid}.",
-                    $"{destination} for me. Paid {paid}."
-                );
+                if (IsDayRiderValid)
+                    return Say(
+                        $"I'm headed to {destination}. I've got a DayRider here.",
+                        $"{destination}. DayRider.",
+                        $"I'm getting off at {destination}. Here's my DayRider."
+                    );
+
+                if (ticketState == PassengerTicketState.Old)
+                    return Say(
+                        $"I'm headed to {destination}. I've only got yesterday's DayRider.",
+                        $"{destination}. I've got an old DayRider here.",
+                        $"I've only got this DayRider from yesterday for {destination}."
+                    );
             }
 
-            return Say(
-                $"I'm heading to {destination}. I've only got {paid}. That should be enough, right?",
-                $"{destination}. I've got {paid} on me — is that alright?",
-                $"I'm getting off at {destination}. I've only got {paid}.",
-                $"{destination}, and I've got {paid}. That's enough for it, isn't it?",
-                $"{destination}. I'm a bit short — I've only got {paid}.",
-                $"I'm headed to {destination}. {paid} is all I've got on me."
-            );
+            return ticketState switch
+            {
+                PassengerTicketState.Valid => Say(
+                    $"I'm getting off at {destination}. DayRider.",
+                    $"{destination}. I've got a DayRider."
+                ),
+                PassengerTicketState.Old => Say(
+                    $"I'm getting off at {destination}. This DayRider should still work.",
+                    $"{destination}. It's still valid enough."
+                ),
+                PassengerTicketState.Fake => Say(
+                    $"{destination}. DayRider. That's all you need.",
+                    $"I'm getting off at {destination}. Here's the DayRider."
+                ),
+                _ => $"I'm going to {destination}. I've got a pass."
+            };
         }
 
-        AnomalySkill skill = GetAnomalySkill();
-
-        switch (skill)
+        int tendered = CashTenderedPence;
+        if (!IsAnomaly)
         {
-            case AnomalySkill.Low:
-                return Say(
-                    $"Uh... {destination}. {stops} stop(s). Here, {paid}.",
-                    $"I'm going to {destination}. That's enough.",
-                    $"{destination}. I've got {paid}.",
-                    $"Right, uh... {destination}. Here.",
-                    $"{destination}. I just need to get there.",
-                    $"I'm going to {destination}. Here's what I've got."
+            return tendered >= ExpectedFare
+                ? Say(
+                    $"I'm heading to {destination}. I've got {FareTable.FormatMoney(tendered)} here.",
+                    $"{destination}. Here's {FareTable.FormatMoney(tendered)}.",
+                    $"I'm getting off at {destination}. I've got {FareTable.FormatMoney(tendered)} on me."
+                )
+                : Say(
+                    $"I'm heading to {destination}. I've only got {FareTable.FormatMoney(tendered)}.",
+                    $"{destination}. I've only got {FareTable.FormatMoney(tendered)} on me.",
+                    $"I'm getting off at {destination}. That's all I've got - {FareTable.FormatMoney(tendered)}."
                 );
-
-            case AnomalySkill.Mid:
-                return PaidAmount == ExpectedFare
-                    ? Say(
-                        $"I'm getting off at {destination}. Here's {paid}.",
-                        $"{destination}. I've got {paid} for it.",
-                        $"Heading to {destination}. Here's {paid}.",
-                        $"{destination}. Paid {paid}.",
-                        $"I'm headed to {destination}. That should all be right."
-                    )
-                    : Say(
-                        $"I'm getting off at {destination}. That should cover it.",
-                        $"{destination}. This should be enough.",
-                        $"Heading to {destination}. I've only got {paid}, but that'll do.",
-                        $"{destination}. It's short, but it's close enough.",
-                        $"I'm going to {destination}. That's all I've got."
-                    );
-
-            case AnomalySkill.High:
-                return PaidAmount == ExpectedFare
-                    ? Say(
-                        $"I'm getting off at {destination}. I paid {paid}.",
-                        $"{destination}. That's {stops} stop(s), and I've got {paid}.",
-                        $"I'm headed to {destination}. Here's {paid}.",
-                        $"{destination}. Fare's {paid}.",
-                        $"I'm getting off at {destination}. Everything should be in order."
-                    )
-                    : Say(
-                        $"I'm getting off at {destination}. I've only got {paid} on me.",
-                        $"{destination}. I've got {paid} — that's all I've got.",
-                        $"I'm headed to {destination}. I've only got {paid}.",
-                        $"{destination}. I'm short, but only by a little.",
-                        $"I'm going to {destination}. {paid} is all I have on me."
-                    );
-
-            default:
-                return Say($"I'm heading to {destination}. Here's {paid}.");
         }
+
+        return tendered >= ExpectedFare
+            ? Say(
+                $"I'm going to {destination}. Here - {FareTable.FormatMoney(tendered)}.",
+                $"{destination}. I've got {FareTable.FormatMoney(tendered)}.",
+                $"Heading to {destination}. Here's {FareTable.FormatMoney(tendered)}."
+            )
+            : Say(
+                $"I'm going to {destination}. That should be enough.",
+                $"{destination}. I've got {FareTable.FormatMoney(tendered)}.",
+                $"Heading to {destination}. That's all I've got."
+            );
     }
 
     private string GetStandingRepeatLine()
     {
-        string destination = GetDestinationName();
+        string destination = GetPublicDestinationName();
 
         if (!IsAnomaly)
         {
             return Say(
                 $"Like I said, I'm going to {destination}.",
-                $"Same as before — {destination}.",
-                $"I already told you, I'm getting off at {destination}.",
-                $"{destination}. Same as I said.",
-                $"Still {destination}.",
-                $"I said {destination} already."
+                $"Same as before - {destination}.",
+                $"I already told you, I'm getting off at {destination}."
             );
         }
 
-        AnomalySkill skill = GetAnomalySkill();
-
-        return skill switch
-        {
-            AnomalySkill.Low => Say("I already told you.", "Why are you asking again?", "Didn't you hear me?", "I said it already."),
-            AnomalySkill.Mid => Say($"Same as before — {destination}.", "I already answered that.", "Same answer.", $"Still {destination}."),
-            AnomalySkill.High => Say($"Still {destination}.", $"I'm still getting off at {destination}.", "Same as before.", $"Nothing changed — {destination}."),
-            _ => Say("Same as before.")
-        };
+        return Say(
+            $"Same as before - {destination}.",
+            "I already answered that.",
+            "Same answer."
+        );
     }
 
     private string GetSeatedRepeatLine()
@@ -341,57 +337,88 @@ public class Passenger : MonoBehaviour
             return Say(
                 "I'm already seated now.",
                 "I've already sat down.",
-                "I'm fine here.",
-                "Already in my seat.",
-                "I'm sorted now.",
-                "Already sat, thanks."
+                "Already in my seat."
             );
         }
 
-        AnomalySkill skill = GetAnomalySkill();
-
-        return skill switch
-        {
-            AnomalySkill.Low => Say("Why are you asking again?", "I'm already sitting.", "Leave me alone.", "I'm sat already."),
-            AnomalySkill.Mid => Say("I've already sat down.", "I'm already seated.", "I'm in my seat now.", "Already sat."),
-            AnomalySkill.High => Say("I'm already seated.", "I'm settled, thanks.", "I've already taken my seat.", "Already in place."),
-            _ => Say("I'm already seated.")
-        };
+        return Say(
+            "I'm already seated.",
+            "I've already taken my seat.",
+            "Why are you asking again?"
+        );
     }
 
     public string GetAnswer(PassengerQuestionType questionType)
     {
-        if (!IsAnomaly)
-            return GetHumanAnswer(questionType);
-
-        return GetAnomalyAnswer(questionType, GetAnomalySkill());
+        return UsesDayRider ? GetTicketAwareAnswer(questionType) : GetCashAwareAnswer(questionType);
     }
 
-    private string GetHumanAnswer(PassengerQuestionType questionType)
+    private string GetTicketAwareAnswer(PassengerQuestionType questionType)
     {
         switch (questionType)
         {
-            case PassengerQuestionType.BoardingStop:
+            case PassengerQuestionType.CurrentStop:
                 return Say(
-                    $"I got on {GetDisplayedBoardingStopsAgo()} stop(s) ago.",
-                    $"About {GetDisplayedBoardingStopsAgo()} stop(s) back.",
-                    $"{GetDisplayedBoardingStopsAgo()} stop(s) ago.",
-                    $"A few stops back — {GetDisplayedBoardingStopsAgo()}, I think.",
-                    $"I boarded {GetDisplayedBoardingStopsAgo()} stop(s) ago.",
-                    $"Back around {GetDisplayedBoardingStopsAgo()} stop(s) ago."
+                    $"We're at {GetCurrentStopName()}.",
+                    $"This stop's {GetCurrentStopName()}.",
+                    GetCurrentStopName()
                 );
 
             case PassengerQuestionType.DestinationStop:
-                string destination = GetDestinationName();
                 return Say(
-                    $"I'm getting off at {destination}.",
-                    $"{destination}.",
-                    $"My stop is {destination}.",
-                    $"I'm headed to {destination}.",
-                    $"I'll be getting off at {destination}.",
-                    $"{destination} is where I'm getting off.",
-                    $"I'm staying on until {destination}.",
-                    $"It should be {destination}."
+                    $"I'm getting off at {GetPublicDestinationName()}.",
+                    GetPublicDestinationName(),
+                    $"My stop is {GetPublicDestinationName()}."
+                );
+
+            case PassengerQuestionType.Seat:
+                string seatName = GetActualSeatName();
+                if (string.IsNullOrEmpty(seatName))
+                    return Say("I don't have a seat yet.", "Not seated yet.");
+                return Say($"Seat {seatName}.", $"I'm in {seatName}.");
+
+            case PassengerQuestionType.Fare:
+                return ticketState switch
+                {
+                    PassengerTicketState.Valid => Say(
+                        "I've got a valid DayRider.",
+                        "DayRider for today.",
+                        $"DayRider - {ticketDateLabel}."
+                    ),
+                    PassengerTicketState.Old => Say(
+                        "It's an old DayRider.",
+                        $"DayRider from {ticketDateLabel}.",
+                        "It's yesterday's one."
+                    ),
+                    PassengerTicketState.Fake => Say(
+                        "It's a DayRider.",
+                        "DayRider. Looks fine.",
+                        $"DayRider - {ticketDateLabel}."
+                    ),
+                    _ => "I've got a pass."
+                };
+
+            default:
+                return "...";
+        }
+    }
+
+    private string GetCashAwareAnswer(PassengerQuestionType questionType)
+    {
+        switch (questionType)
+        {
+            case PassengerQuestionType.CurrentStop:
+                return Say(
+                    $"We're at {GetCurrentStopName()}.",
+                    $"This stop's {GetCurrentStopName()}.",
+                    GetCurrentStopName()
+                );
+
+            case PassengerQuestionType.DestinationStop:
+                return Say(
+                    $"I'm getting off at {GetPublicDestinationName()}.",
+                    GetPublicDestinationName(),
+                    $"My stop is {GetPublicDestinationName()}."
                 );
 
             case PassengerQuestionType.Seat:
@@ -399,198 +426,86 @@ public class Passenger : MonoBehaviour
                 if (string.IsNullOrEmpty(seatName))
                 {
                     return hasBeenProcessed
-                        ? Say("I haven't got one somehow.", "Not in a seat yet.", "Still not seated.", "Haven't ended up in one yet.")
-                        : Say("I don't have a seat yet.", "Not seated yet.", "I haven't sat down yet.", "Still waiting to sit down.");
+                        ? Say("I haven't got one somehow.", "Still not seated.")
+                        : Say("I don't have a seat yet.", "Not seated yet.");
                 }
 
                 return Say(
                     $"I'm in seat {seatName}.",
                     $"Seat {seatName}.",
-                    $"That's my seat — {seatName}.",
-                    $"{seatName}.",
-                    $"I'm sat in {seatName}.",
-                    $"It's {seatName}.",
-                    $"I ended up in {seatName}."
+                    $"That's my seat - {seatName}."
                 );
 
             case PassengerQuestionType.Fare:
-                return Say(
-                    $"I paid {PaidAmount}.",
-                    $"{PaidAmount}.",
-                    $"It was {PaidAmount}.",
-                    $"I gave you {PaidAmount}.",
-                    $"Paid {PaidAmount}.",
-                    $"That was {PaidAmount}.",
-                    $"I put down {PaidAmount}."
-                );
-
-            default:
-                return "...";
-        }
-    }
-
-    private string GetAnomalyAnswer(PassengerQuestionType questionType, AnomalySkill skill)
-    {
-        switch (skill)
-        {
-            case AnomalySkill.Low:
-                return GetLowSkillAnomalyAnswer(questionType);
-
-            case AnomalySkill.Mid:
-                return GetMidSkillAnomalyAnswer(questionType);
-
-            case AnomalySkill.High:
-                return GetHighSkillAnomalyAnswer(questionType);
-
-            default:
-                return GetMidSkillAnomalyAnswer(questionType);
-        }
-    }
-
-    private string GetLowSkillAnomalyAnswer(PassengerQuestionType questionType)
-    {
-        string destination = GetDestinationName();
-
-        switch (questionType)
-        {
-            case PassengerQuestionType.BoardingStop:
-                return Say(
-                    "I got on... here. No, wait.",
-                    $"{Mathf.Max(0, StopsInfoB + 2)} stop(s) ago.",
-                    "A while back.",
-                    "I don't remember.",
-                    "Back there somewhere.",
-                    "A few stops. Maybe."
-                );
-
-            case PassengerQuestionType.DestinationStop:
-                return Say(
-                    $"I'm getting off at... {destination}.",
-                    $"{destination}, I think.",
-                    "That stop up ahead.",
-                    "Where everyone else gets off.",
-                    $"Probably {destination}.",
-                    $"Somewhere near {destination}."
-                );
-
-            case PassengerQuestionType.Seat:
-                if (isSeatedPassenger)
-                    return Say($"Seat {GetActualSeatName()}.", $"I'm in {GetActualSeatName()}.", $"That one — {GetActualSeatName()}.");
-                return Say("I was just about to sit down.", "Haven't sat yet.", "Still finding one.", "Not in one yet.");
-
-            case PassengerQuestionType.Fare:
-                return PaidAmount == ExpectedFare
-                    ? Say($"I paid {PaidAmount}.", $"{PaidAmount}.", $"It was {PaidAmount}.")
-                    : Say("That should be enough.", "It's enough.", "Close enough.", $"That covers it. {PaidAmount}.");
-
-            default:
-                return "...";
-        }
-    }
-
-    private string GetMidSkillAnomalyAnswer(PassengerQuestionType questionType)
-    {
-        bool subtleSlip = StableBool(17);
-        string destination = GetDestinationName();
-
-        switch (questionType)
-        {
-            case PassengerQuestionType.BoardingStop:
-                return subtleSlip
+                return IsAnomaly && CashTenderedPence < ExpectedFare
                     ? Say(
-                        $"I got on {Mathf.Max(0, StopsInfoB + 1)} stop(s) ago.",
-                        $"About {Mathf.Max(0, StopsInfoB + 1)} stop(s) back.",
-                        $"Should be {Mathf.Max(0, StopsInfoB + 1)} stop(s) ago."
+                        "That should be enough.",
+                        $"I've got {FareTable.FormatMoney(CashTenderedPence)}.",
+                        "Close enough."
                     )
                     : Say(
-                        $"I got on {StopsInfoB} stop(s) ago.",
-                        $"{StopsInfoB} stop(s) ago.",
-                        $"Back {StopsInfoB} stop(s)."
+                        $"I handed over {FareTable.FormatMoney(CashTenderedPence)}.",
+                        $"{FareTable.FormatMoney(CashTenderedPence)}.",
+                        $"I gave you {FareTable.FormatMoney(CashTenderedPence)}."
                     );
-
-            case PassengerQuestionType.DestinationStop:
-                return subtleSlip
-                    ? Say(
-                        $"I'm getting off at {destination}, I think.",
-                        $"Should be {destination}.",
-                        $"Somewhere near {destination}.",
-                        $"It should be {destination}."
-                    )
-                    : Say(
-                        $"I'm getting off at {destination}.",
-                        $"{destination}.",
-                        $"My stop is {destination}.",
-                        $"I'm due off at {destination}."
-                    );
-
-            case PassengerQuestionType.Seat:
-                {
-                    string actualSeat = GetActualSeatName();
-                    if (string.IsNullOrEmpty(actualSeat))
-                        return Say("I don't have a seat yet.", "Not seated yet.", "Still waiting on one.");
-
-                    return subtleSlip
-                        ? Say("Somewhere near the middle.", "A bit further back.", "One of those seats there.", "Round there somewhere.")
-                        : Say($"Seat {actualSeat}.", $"I'm in {actualSeat}.", $"{actualSeat}.", $"That should be {actualSeat}.");
-                }
-
-            case PassengerQuestionType.Fare:
-                if (PaidAmount == ExpectedFare)
-                    return Say($"I paid {PaidAmount}.", $"{PaidAmount}.", $"It was {PaidAmount}.", $"I gave {PaidAmount}.");
-
-                return subtleSlip
-                    ? Say($"I paid {PaidAmount + 1}.", $"Pretty sure it was {PaidAmount + 1}.", "That should cover it.")
-                    : Say("That should cover it.", "That should be enough.", $"I gave you {PaidAmount}.", $"It was {PaidAmount}.");
 
             default:
                 return "...";
         }
     }
 
-    private string GetHighSkillAnomalyAnswer(PassengerQuestionType questionType)
+    public string GetPaymentShortLabel()
     {
-        bool tinyTell = StableBool(31);
-        string destination = GetDestinationName();
-
-        switch (questionType)
+        if (UsesDayRider)
         {
-            case PassengerQuestionType.BoardingStop:
-                return tinyTell
-                    ? Say($"I got on {StopsInfoB} stop(s) ago, I think.", $"Should've been {StopsInfoB} stop(s) ago.", $"Roughly {StopsInfoB} stop(s) ago.")
-                    : Say($"I got on {StopsInfoB} stop(s) ago.", $"{StopsInfoB} stop(s) ago.", $"Back {StopsInfoB} stop(s).");
-
-            case PassengerQuestionType.DestinationStop:
-                return tinyTell
-                    ? Say($"I should be getting off at {destination}.", $"{destination}, I think.", $"It should be {destination}.")
-                    : Say($"I'm getting off at {destination}.", $"{destination}.", $"That's my stop — {destination}.", $"I'm due off at {destination}.");
-
-            case PassengerQuestionType.Seat:
-                {
-                    string actualSeat = GetActualSeatName();
-                    if (string.IsNullOrEmpty(actualSeat))
-                        return Say("I don't have a seat yet.", "Not seated yet.", "Still not in one.");
-
-                    return tinyTell
-                        ? Say($"I think it's seat {actualSeat}.", $"Should be {actualSeat}.", $"It should be {actualSeat}.")
-                        : Say($"Seat {actualSeat}.", $"I'm in {actualSeat}.", $"{actualSeat}.", $"That's mine — {actualSeat}.");
-                }
-
-            case PassengerQuestionType.Fare:
-                if (PaidAmount == ExpectedFare)
-                    return tinyTell
-                        ? Say($"Pretty sure I paid {PaidAmount}.", $"It should've been {PaidAmount}.", $"I believe it was {PaidAmount}.")
-                        : Say($"I paid {PaidAmount}.", $"{PaidAmount}.", $"It was {PaidAmount}.", $"I gave {PaidAmount}.");
-
-                return tinyTell
-                    ? Say($"I've only got {PaidAmount} on me.", $"I only had {PaidAmount}.", $"I've only got {PaidAmount} right now.")
-                    : Say("I've only got that much on me.", $"I've only got {PaidAmount}.", $"That's all I had — {PaidAmount}.");
-
-            default:
-                return "...";
+            return ticketState switch
+            {
+                PassengerTicketState.Valid => "DayRider",
+                PassengerTicketState.Old => "Old DayRider",
+                PassengerTicketState.Fake => "Suspicious DayRider",
+                _ => "Pass"
+            };
         }
+
+        return "Cash";
     }
 
-    private string GetDestinationName()
+    public string BuildTenderSummary()
+    {
+        if (!UsesCash)
+            return "Tendered: No cash - using ticket";
+
+        string list = string.Empty;
+        for (int i = 0; i < tenderedDenominations.Length; i++)
+        {
+            if (i > 0) list += ", ";
+            list += FareTable.FormatMoney(tenderedDenominations[i]);
+        }
+
+        if (string.IsNullOrEmpty(list))
+            list = "Nothing";
+
+        return $"Tendered: {FareTable.FormatMoney(CashTenderedPence)} ({list})";
+    }
+
+    public string BuildTicketStatusSummary()
+    {
+        if (!UsesDayRider)
+            return "Ticket: None";
+
+        string status = ticketState switch
+        {
+            PassengerTicketState.Valid => "Valid",
+            PassengerTicketState.Old => "Old",
+            PassengerTicketState.Fake => "Suspicious",
+            _ => "Unknown"
+        };
+
+        string extra = string.IsNullOrWhiteSpace(ticketDateLabel) ? string.Empty : $" ({ticketDateLabel})";
+        return $"Ticket: {ticketLabel} - {status}{extra}";
+    }
+
+    public string GetPublicDestinationName()
     {
         if (RouteStops.Instance != null)
             return RouteStops.Instance.GetDestinationName(dropOffStopIndex);
@@ -601,17 +516,12 @@ public class Passenger : MonoBehaviour
         return $"{ClaimedStopsRemaining} stop(s) away";
     }
 
-    private int GetDisplayedBoardingStopsAgo()
+    private string GetCurrentStopName()
     {
-        return stopsInfoAccuracy switch
-        {
-            StopInfoAccuracy.Correct => StopsInfoB,
-            StopInfoAccuracy.Incorrect => Mathf.Max(0, StopsInfoB + 1),
-            StopInfoAccuracy.Unknown => StopsInfoB,
-            StopInfoAccuracy.AccidentalMistake => Mathf.Max(0, StopsInfoB + (StableBool(5) ? 1 : 0)),
-            StopInfoAccuracy.IntentionalLie => Mathf.Max(0, StopsInfoB + 1),
-            _ => StopsInfoB
-        };
+        if (RouteStops.Instance == null)
+            return "Unknown Stop";
+
+        return RouteStops.Instance.GetStopNameSafe(RouteStops.Instance.NextStopIndex);
     }
 
     private string GetActualSeatName()
@@ -621,12 +531,6 @@ public class Passenger : MonoBehaviour
 
         SeatAnchor seat = SeatManager.Instance.GetSeatForPassenger(this);
         return seat != null ? seat.name : null;
-    }
-
-    private AnomalySkill GetAnomalySkill()
-    {
-        AnomalyController controller = GetComponent<AnomalyController>();
-        return controller != null ? controller.Skill : AnomalySkill.Mid;
     }
 
     private void EnsureIdData()
@@ -642,7 +546,7 @@ public class Passenger : MonoBehaviour
         }
 
         if (string.IsNullOrWhiteSpace(idNumber))
-            idNumber = $"ID-{100000 + (seed % 900000)}";
+            idNumber = $"ID-{(100000 + (seed % 900000))}";
 
         if (string.IsNullOrWhiteSpace(expiryDate))
         {
@@ -653,156 +557,33 @@ public class Passenger : MonoBehaviour
         }
     }
 
-    private void ResolveSpeechStyle()
+    private int SumTendered()
     {
-        if (speechStyle != PassengerSpeechStyle.Auto)
-        {
-            resolvedSpeechStyle = speechStyle;
-            return;
-        }
+        if (tenderedDenominations == null)
+            return 0;
 
-        PassengerSpeechStyle[] pool = IsAnomaly
-            ? new[] { PassengerSpeechStyle.Reserved, PassengerSpeechStyle.Casual, PassengerSpeechStyle.Nervous, PassengerSpeechStyle.Blunt, PassengerSpeechStyle.Polite }
-            : new[] { PassengerSpeechStyle.Reserved, PassengerSpeechStyle.Polite, PassengerSpeechStyle.Casual, PassengerSpeechStyle.Nervous, PassengerSpeechStyle.Blunt };
-
-        int seed = Mathf.Abs((StableStringHash(passengerName) * 31) ^ GetInstanceID() ^ (IsAnomaly ? 97 : 13));
-        resolvedSpeechStyle = pool[seed % pool.Length];
+        int total = 0;
+        for (int i = 0; i < tenderedDenominations.Length; i++)
+            total += Mathf.Max(0, tenderedDenominations[i]);
+        return total;
     }
 
-    private bool StableBool(int salt)
+    private static int[] CopyArray(int[] source)
     {
-        int seed = Mathf.Abs((GetInstanceID() * 73856093) ^ (salt * 19349663));
-        return (seed % 100) < 50;
+        if (source == null)
+            return System.Array.Empty<int>();
+
+        int[] copy = new int[source.Length];
+        for (int i = 0; i < source.Length; i++)
+            copy[i] = Mathf.Max(0, source[i]);
+        return copy;
     }
 
-    private bool StableLineBool(string line, int salt)
-    {
-        int seed = Mathf.Abs((GetInstanceID() * 83492791) ^ (StableStringHash(line) * 19349663) ^ salt ^ (StableStringHash(passengerName) * 31));
-        return (seed % 100) < 50;
-    }
-
-    private string Say(params string[] options)
+    private static string Say(params string[] options)
     {
         if (options == null || options.Length == 0)
             return "...";
 
-        string picked = options[Random.Range(0, options.Length)];
-        return ApplySpeechFlavour(picked);
-    }
-
-    private string ApplySpeechFlavour(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-            return "...";
-
-        line = line.Trim();
-
-        return IsAnomaly
-            ? ApplyAnomalySpeechFlavour(line)
-            : ApplyHumanSpeechFlavour(line);
-    }
-
-    private string ApplyHumanSpeechFlavour(string line)
-    {
-        switch (resolvedSpeechStyle)
-        {
-            case PassengerSpeechStyle.Polite:
-                if (!line.EndsWith("?") && !line.Contains("thanks") && StableLineBool(line, 101))
-                    return $"{TrimEndPunctuation(line)}, thanks.";
-                if (StableLineBool(line, 102))
-                    return $"Sorry, {line}";
-                return line;
-
-            case PassengerSpeechStyle.Casual:
-                if (StableLineBool(line, 103))
-                    return $"Yeah, {line}";
-                return line;
-
-            case PassengerSpeechStyle.Nervous:
-                if (StableLineBool(line, 104))
-                    return $"Uh... {line}";
-                return $"Sorry, {line}";
-
-            case PassengerSpeechStyle.Blunt:
-                return ShortenBluntLine(line);
-
-            case PassengerSpeechStyle.Reserved:
-            case PassengerSpeechStyle.Auto:
-            default:
-                return line;
-        }
-    }
-
-    private string ApplyAnomalySpeechFlavour(string line)
-    {
-        AnomalySkill skill = GetAnomalySkill();
-
-        switch (skill)
-        {
-            case AnomalySkill.Low:
-                if (!line.StartsWith("Uh") && StableLineBool(line, 201))
-                    line = $"Uh... {line}";
-                if (!line.EndsWith("?") && StableLineBool(line, 202))
-                    line = $"{TrimEndPunctuation(line)}...";
-                return line;
-
-            case AnomalySkill.Mid:
-                if (resolvedSpeechStyle == PassengerSpeechStyle.Polite && StableLineBool(line, 203))
-                    return $"Right, {line}";
-                if (resolvedSpeechStyle == PassengerSpeechStyle.Nervous && StableLineBool(line, 204))
-                    return $"I think... {line}";
-                if (resolvedSpeechStyle == PassengerSpeechStyle.Casual && StableLineBool(line, 205))
-                    return $"Yeah... {line}";
-                return line;
-
-            case AnomalySkill.High:
-                if (resolvedSpeechStyle == PassengerSpeechStyle.Blunt && StableLineBool(line, 206))
-                    return ShortenBluntLine(line);
-                if (resolvedSpeechStyle == PassengerSpeechStyle.Polite && !line.EndsWith("?") && !line.Contains("thanks") && StableLineBool(line, 207))
-                    return $"{TrimEndPunctuation(line)}, thanks.";
-                return line;
-
-            default:
-                return line;
-        }
-    }
-
-    private static string ShortenBluntLine(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-            return "...";
-
-        string result = line
-            .Replace("I'm getting off at ", string.Empty)
-            .Replace("I'm headed to ", string.Empty)
-            .Replace("I'm heading to ", string.Empty)
-            .Replace("I'll be getting off at ", string.Empty)
-            .Replace("My stop is ", string.Empty)
-            .Replace("I got on ", string.Empty)
-            .Replace("I boarded ", string.Empty)
-            .Replace("I paid ", string.Empty)
-            .Replace("I gave you ", string.Empty)
-            .Replace("I gave ", string.Empty);
-
-        return string.IsNullOrWhiteSpace(result) ? line : result;
-    }
-
-    private static string TrimEndPunctuation(string line)
-    {
-        return line.TrimEnd(' ', '.', '!', '?');
-    }
-
-    private static int StableStringHash(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return 0;
-
-        unchecked
-        {
-            int hash = 23;
-            for (int i = 0; i < value.Length; i++)
-                hash = (hash * 31) + value[i];
-            return hash;
-        }
+        return options[Random.Range(0, options.Length)];
     }
 }

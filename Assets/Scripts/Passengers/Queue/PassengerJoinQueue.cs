@@ -19,15 +19,22 @@ public sealed class PassengerJoinQueue : MonoBehaviour
     private Passenger passenger;
     private QueueManagerNodes queue;
     private Transform entryPoint;
+    private int requiredStopIndex = -1;
 
     private Vector3 entryOffset;
     private bool offsetChosen;
 
     public void Begin(Passenger p, QueueManagerNodes q, Transform entry)
     {
+        Begin(p, q, entry, -1);
+    }
+
+    public void Begin(Passenger p, QueueManagerNodes q, Transform entry, int stopIndex)
+    {
         passenger = p;
         queue = q;
         entryPoint = entry;
+        requiredStopIndex = stopIndex;
 
         offsetChosen = false;
         enabled = (passenger != null && queue != null && entryPoint != null);
@@ -47,6 +54,15 @@ public sealed class PassengerJoinQueue : MonoBehaviour
         {
             Destroy(this);
             return;
+        }
+
+        if (requiredStopIndex >= 0 && RouteStops.Instance != null)
+        {
+            if (!RouteStops.Instance.WaitingAtStop)
+                return;
+
+            if (RouteStops.Instance.CurrentStopIndex != requiredStopIndex)
+                return;
         }
 
         if (!offsetChosen)
@@ -109,6 +125,8 @@ public sealed class PassengerJoinQueue : MonoBehaviour
             var other = c.GetComponentInParent<Passenger>();
             if (other == null) continue;
             if (other == passenger) continue;
+
+            if (other.HasBeenProcessed || other.IsSeatedPassenger) continue;
 
             // Found another passenger ahead close enough -> blocked
             return true;

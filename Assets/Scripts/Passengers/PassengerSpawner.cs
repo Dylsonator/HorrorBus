@@ -155,7 +155,7 @@ public sealed class PassengerSpawner : MonoBehaviour
             if (join == null)
                 join = p.gameObject.AddComponent<PassengerJoinQueue>();
 
-            join.Begin(p, queueManager, queueEntryPoint);
+            join.Begin(p, queueManager, queueEntryPoint, currentStopIndex);
             activePassengers.Add(p);
 
             if (!p.IsAnomaly)

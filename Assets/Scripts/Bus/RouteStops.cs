@@ -24,13 +24,17 @@ public sealed class RouteStops : MonoBehaviour
 
     [Header("Resume key")]
     [SerializeField] private Key resumeKey = Key.Space;
+    [SerializeField] private float resumeCooldownSeconds = 0.20f;
 
     private int nextStopIndex = 0;
     private bool waitingAtStop;
+    private float resumeCooldownTimer;
 
     public bool WaitingAtStop => waitingAtStop;
     public int NextStopIndex => nextStopIndex;
     public int StopCount => stopTs != null ? stopTs.Length : 0;
+    public int CurrentStopIndex => waitingAtStop ? nextStopIndex : GetPreviousStopIndex();
+    public string CurrentStopName => GetStopNameSafe(CurrentStopIndex);
 
     private void Awake()
     {
@@ -50,20 +54,11 @@ public sealed class RouteStops : MonoBehaviour
         if (busDrive == null || stopTs == null || stopTs.Length == 0)
             return;
 
-        if (Keyboard.current != null && Keyboard.current[resumeKey].wasPressedThisFrame)
-        {
-            if (decisionGate != null && !decisionGate.CanDepart)
-            {
-                Debug.Log($"Cannot leave stop: {decisionGate.PendingCount} passenger(s) still need a decision.");
-                return;
-            }
-
-            ResumeFromStop();
-        }
+        if (resumeCooldownTimer > 0f)
+            resumeCooldownTimer -= Time.unscaledDeltaTime;
 
         float t = busDrive.NormalizedT;
         float targetStopT = stopTs[nextStopIndex];
-
         bool inZone = IsWithinToleranceLooped(t, targetStopT, stopTolerance);
 
         if (inZone)
@@ -78,6 +73,25 @@ public sealed class RouteStops : MonoBehaviour
         {
             stopTriggerArmed = true;
         }
+
+        if (!waitingAtStop)
+            return;
+
+        if (Keyboard.current == null || !Keyboard.current[resumeKey].wasPressedThisFrame)
+            return;
+
+        if (resumeCooldownTimer > 0f)
+            return;
+
+        if (decisionGate != null && !decisionGate.CanDepart)
+        {
+            Debug.Log($"Cannot leave stop: {decisionGate.PendingCount} passenger(s) still need a decision.");
+            resumeCooldownTimer = resumeCooldownSeconds;
+            return;
+        }
+
+        ResumeFromStop();
+        resumeCooldownTimer = resumeCooldownSeconds;
     }
 
     public float DistanceToNextStop
@@ -123,7 +137,6 @@ public sealed class RouteStops : MonoBehaviour
     private void ArriveAtStopInternal()
     {
         waitingAtStop = true;
-
         busDrive.SetSpeed(0f);
 
         if (slowDown != null) slowDown.enabled = false;
@@ -140,6 +153,7 @@ public sealed class RouteStops : MonoBehaviour
             passengerSpawner.SpawnPassengers(arrivedIndex, stopCount);
         }
 
+        resumeCooldownTimer = resumeCooldownSeconds;
         ArrivedAtStop?.Invoke();
         Debug.Log($"Arrived at {GetStopNameSafe(arrivedIndex)}. Press {resumeKey} to continue.");
     }
@@ -156,6 +170,17 @@ public sealed class RouteStops : MonoBehaviour
 
         LeavingStop?.Invoke();
         Debug.Log("Leaving stop.");
+    }
+
+    private int GetPreviousStopIndex()
+    {
+        if (stopTs == null || stopTs.Length == 0)
+            return 0;
+
+        int prev = nextStopIndex - 1;
+        if (prev < 0)
+            prev = stopTs.Length - 1;
+        return prev;
     }
 
     private static bool IsWithinToleranceLooped(float a, float b, float tol)

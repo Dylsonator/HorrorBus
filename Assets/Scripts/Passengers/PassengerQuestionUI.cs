@@ -1,7 +1,7 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections;
 
 public sealed class PassengerQuestionUI : MonoBehaviour
 {
@@ -9,8 +9,11 @@ public sealed class PassengerQuestionUI : MonoBehaviour
     [SerializeField] private TMP_Text promptText;
     [SerializeField] private TMP_Text answerText;
     [SerializeField, Min(1f)] private float charactersPerSecond = 45f;
+    [SerializeField] private bool allowInstantReveal = true;
 
     private Coroutine typeRoutine;
+    private string currentFullAnswer = string.Empty;
+    private bool isTyping;
 
     private void Awake()
     {
@@ -20,15 +23,52 @@ public sealed class PassengerQuestionUI : MonoBehaviour
         Clear();
     }
 
+    private void Update()
+    {
+        if (!allowInstantReveal || !isTyping)
+            return;
+
+        bool revealPressed = false;
+
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            revealPressed = true;
+
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+            revealPressed = true;
+
+        if (revealPressed)
+            RevealInstantly();
+    }
+
     public void Show(string prompt, string answer)
     {
-        if (root != null)
-            root.SetActive(true);
+        if (root == null)
+            root = gameObject;
 
         if (promptText != null)
             promptText.text = prompt ?? string.Empty;
 
-        BeginType(answer ?? string.Empty);
+        currentFullAnswer = answer ?? string.Empty;
+
+        if (!gameObject.activeInHierarchy)
+            return;
+
+        if (root != null && !root.activeSelf)
+            root.SetActive(true);
+
+        BeginType(currentFullAnswer);
+    }
+
+    public void ActivateAndReplayLast()
+    {
+        if (root == null)
+            root = gameObject;
+
+        if (root != null)
+            root.SetActive(true);
+
+        if (!string.IsNullOrEmpty(currentFullAnswer))
+            BeginType(currentFullAnswer);
     }
 
     public void Clear()
@@ -38,6 +78,9 @@ public sealed class PassengerQuestionUI : MonoBehaviour
             StopCoroutine(typeRoutine);
             typeRoutine = null;
         }
+
+        isTyping = false;
+        currentFullAnswer = string.Empty;
 
         if (promptText != null)
             promptText.text = string.Empty;
@@ -52,30 +95,18 @@ public sealed class PassengerQuestionUI : MonoBehaviour
             root.SetActive(false);
     }
 
-    private void Update()
-    {
-        if (root == null || !root.activeSelf)
-            return;
-
-        if (typeRoutine == null)
-            return;
-
-        bool reveal = false;
-
-        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
-            reveal = true;
-
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            reveal = true;
-
-        if (reveal)
-            RevealInstantly();
-    }
-
     private void BeginType(string fullText)
     {
         if (answerText == null)
             return;
+
+        if (!gameObject.activeInHierarchy)
+        {
+            answerText.text = fullText;
+            answerText.maxVisibleCharacters = int.MaxValue;
+            isTyping = false;
+            return;
+        }
 
         if (typeRoutine != null)
         {
@@ -85,10 +116,11 @@ public sealed class PassengerQuestionUI : MonoBehaviour
 
         answerText.text = fullText;
         answerText.maxVisibleCharacters = 0;
+        isTyping = true;
         typeRoutine = StartCoroutine(TypeRoutine());
     }
 
-    public void RevealInstantly()
+    private void RevealInstantly()
     {
         if (answerText == null)
             return;
@@ -99,8 +131,9 @@ public sealed class PassengerQuestionUI : MonoBehaviour
             typeRoutine = null;
         }
 
-        answerText.ForceMeshUpdate();
-        answerText.maxVisibleCharacters = answerText.textInfo.characterCount;
+        answerText.text = currentFullAnswer;
+        answerText.maxVisibleCharacters = int.MaxValue;
+        isTyping = false;
     }
 
     private IEnumerator TypeRoutine()
@@ -118,6 +151,7 @@ public sealed class PassengerQuestionUI : MonoBehaviour
         }
 
         answerText.maxVisibleCharacters = totalVisibleChars;
+        isTyping = false;
         typeRoutine = null;
     }
 }
