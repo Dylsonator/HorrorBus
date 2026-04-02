@@ -1,3 +1,4 @@
+﻿
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
@@ -5,14 +6,20 @@ using UnityEngine;
 public sealed class DriverWallet : MonoBehaviour
 {
     [SerializeField] private FareTable fareTable;
+    [SerializeField] private bool infiniteFloat = true;
 
     private readonly Dictionary<int, int> countsByValue = new Dictionary<int, int>();
     private int[] valuesDescending = System.Array.Empty<int>();
+
+    public bool InfiniteFloat => infiniteFloat;
 
     public int TotalPence
     {
         get
         {
+            if (infiniteFloat)
+                return 999999;
+
             int total = 0;
             foreach (KeyValuePair<int, int> pair in countsByValue)
                 total += pair.Key * Mathf.Max(0, pair.Value);
@@ -31,25 +38,36 @@ public sealed class DriverWallet : MonoBehaviour
 
         valuesDescending = fareTable != null
             ? fareTable.GetDenominationValuesDescending()
-            : new[] { 500, 200, 100, 50, 20, 10, 5 };
+            : new[] { 2000, 1000, 500, 200, 100, 50, 20, 10, 5 };
 
         int[] counts = fareTable != null
             ? fareTable.GetStartingCountsMatchingValues(valuesDescending)
-            : new[] { 2, 4, 8, 8, 12, 12, 12 };
+            : new[] { 2, 2, 4, 6, 8, 12, 14, 14, 16 };
 
         for (int i = 0; i < valuesDescending.Length; i++)
             countsByValue[valuesDescending[i]] = i < counts.Length ? Mathf.Max(0, counts[i]) : 0;
     }
 
+    public int[] GetVisibleDenominationValues()
+    {
+        if (valuesDescending == null || valuesDescending.Length == 0)
+            ResetWallet();
+
+        return valuesDescending;
+    }
+
     public int GetCount(int valuePence)
     {
+        if (infiniteFloat)
+            return 999;
+
         return countsByValue.TryGetValue(valuePence, out int count) ? count : 0;
     }
 
     public string BuildWalletSummary()
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"Float Total: {FareTable.FormatMoney(TotalPence)}");
+        sb.AppendLine(infiniteFloat ? "Float: unlimited" : $"Float Total: {FareTable.FormatMoney(TotalPence)}");
 
         if (valuesDescending == null || valuesDescending.Length == 0)
             return sb.ToString().TrimEnd();
@@ -58,7 +76,7 @@ public sealed class DriverWallet : MonoBehaviour
         {
             int value = valuesDescending[i];
             string label = fareTable != null ? fareTable.GetLabelForValue(value) : FareTable.FormatMoney(value);
-            sb.AppendLine($"{label} x{GetCount(value)}");
+            sb.AppendLine(infiniteFloat ? $"{label} x∞" : $"{label} x{GetCount(value)}");
         }
 
         return sb.ToString().TrimEnd();
@@ -66,6 +84,12 @@ public sealed class DriverWallet : MonoBehaviour
 
     public bool TryPreviewExactChangeAfterTender(int[] tenderedDenominations, int amountPence, out List<int> plan)
     {
+        if (infiniteFloat)
+        {
+            plan = BuildGreedyPlan(amountPence);
+            return Sum(plan) == Mathf.Max(0, amountPence);
+        }
+
         Dictionary<int, int> working = CloneCounts();
         AddValuesToCounts(working, tenderedDenominations);
         return TryBuildGreedyPlan(working, amountPence, out plan);
@@ -74,6 +98,9 @@ public sealed class DriverWallet : MonoBehaviour
     public bool TryApplyCashTransaction(int[] tenderedDenominations, IReadOnlyList<int> returnedDenominations, out string failureReason)
     {
         failureReason = string.Empty;
+
+        if (infiniteFloat)
+            return true;
 
         Dictionary<int, int> working = CloneCounts();
         AddValuesToCounts(working, tenderedDenominations);
@@ -135,15 +162,13 @@ public sealed class DriverWallet : MonoBehaviour
     private bool TryBuildGreedyPlan(Dictionary<int, int> availableCounts, int amountPence, out List<int> plan)
     {
         plan = new List<int>();
-        amountPence = Mathf.Max(0, amountPence);
+        int remaining = Mathf.Max(0, amountPence);
 
-        if (amountPence == 0)
+        if (remaining == 0)
             return true;
 
         if (valuesDescending == null || valuesDescending.Length == 0)
             return false;
-
-        int remaining = amountPence;
 
         for (int i = 0; i < valuesDescending.Length; i++)
         {
@@ -159,6 +184,32 @@ public sealed class DriverWallet : MonoBehaviour
         }
 
         return remaining == 0;
+    }
+
+    private List<int> BuildGreedyPlan(int amountPence)
+    {
+        List<int> plan = new List<int>();
+        int remaining = Mathf.Max(0, amountPence);
+        int[] values = GetVisibleDenominationValues();
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            while (remaining >= values[i])
+            {
+                remaining -= values[i];
+                plan.Add(values[i]);
+            }
+        }
+
+        return plan;
+    }
+
+    private int Sum(List<int> values)
+    {
+        int total = 0;
+        if (values == null) return 0;
+        for (int i = 0; i < values.Count; i++) total += values[i];
+        return total;
     }
 
     private string GetLabel(int valuePence)

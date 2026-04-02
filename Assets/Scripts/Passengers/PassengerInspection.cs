@@ -1,15 +1,11 @@
-﻿using UnityEngine;
-using System.Collections.Generic;
-using TMPro;
+﻿
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 public sealed class PassengerInspection : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] private PassengerInspectUI inspectUI;
-    [SerializeField] private PassengerQuestionUI questionUI;
-    [SerializeField] private BusFareUI fareUI;
-    [SerializeField] private InspectionPanelSwitcher panelSwitcher;
+    [SerializeField] private InspectionDeskUI deskUI;
     [SerializeField] private StopGate stopGate;
     [SerializeField] private ScoreManager scoreManager;
     [SerializeField] private CabinPeek cabinPeek;
@@ -28,52 +24,47 @@ public sealed class PassengerInspection : MonoBehaviour
     [Header("Behaviour")]
     [SerializeField] private bool autoRegisterPassengerOnInspect = true;
     [SerializeField] private bool seatPassengerOnAccept = true;
-    [SerializeField] private bool enableNumberHotkeys = true;
+    [SerializeField, Range(0f, 1f)] private float rareReturnReminderChance = 0.15f;
 
-    private readonly List<int> selectedChangeDenominations = new List<int>();
     private Passenger current;
-    private string openingLine = string.Empty;
-    private bool questionTabOpenedOnce;
+    private bool viewOnlyPaused;
 
     public Passenger Current => current;
-    public bool IsInspecting => current != null;
+    public bool HasOpenSession => current != null;
 
     private void Awake()
     {
-        if (inspectUI == null) inspectUI = FindSceneObject<PassengerInspectUI>();
-        if (questionUI == null) questionUI = FindSceneObject<PassengerQuestionUI>();
-        if (fareUI == null) fareUI = FindSceneObject<BusFareUI>();
-        if (panelSwitcher == null) panelSwitcher = FindSceneObject<InspectionPanelSwitcher>();
+        if (deskUI == null) deskUI = FindFirstObjectByType<InspectionDeskUI>(FindObjectsInactive.Include);
         if (stopGate == null) stopGate = FindFirstObjectByType<StopGate>();
         if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
         if (cabinPeek == null) cabinPeek = FindFirstObjectByType<CabinPeek>();
         if (queueManager == null) queueManager = FindFirstObjectByType<QueueManagerNodes>();
         if (driverWallet == null) driverWallet = FindFirstObjectByType<DriverWallet>();
         if (fareTable == null) fareTable = FindFirstObjectByType<FareTable>();
+
+        if (deskUI != null)
+        {
+            deskUI.SeatRequested += AcceptCurrent;
+            deskUI.DenyRequested += DenyCurrent;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (deskUI != null)
+        {
+            deskUI.SeatRequested -= AcceptCurrent;
+            deskUI.DenyRequested -= DenyCurrent;
+        }
     }
 
     private void Update()
     {
-        if (!IsInspecting)
+        if (current == null || viewOnlyPaused)
             return;
 
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            ClearInspectionAndResumeLook();
-            return;
-        }
-
-        if (!enableNumberHotkeys || Keyboard.current == null)
-            return;
-
-        if (Keyboard.current.digit1Key.wasPressedThisFrame)
-            OpenIdTab();
-
-        if (Keyboard.current.digit2Key.wasPressedThisFrame)
-            OpenQuestionsTab();
-
-        if (Keyboard.current.digit3Key.wasPressedThisFrame)
-            OpenFareTab();
+            PauseInspectionAndResumeLook();
     }
 
     public void Inspect(Passenger passenger)
@@ -81,34 +72,34 @@ public sealed class PassengerInspection : MonoBehaviour
         if (passenger == null)
             return;
 
+        if (current != null && passenger == current)
+        {
+            viewOnlyPaused = false;
+            deskUI?.Open(current, driverWallet, fareTable);
+            EnterInspectionMode();
+            return;
+        }
+
+        if (current != null && passenger != current)
+            return;
+
         current = passenger;
-        openingLine = passenger.GetOpeningStatement();
-        questionTabOpenedOnce = false;
-        selectedChangeDenominations.Clear();
+        viewOnlyPaused = false;
 
         FreezePassengerMovement(passenger);
 
         if (autoRegisterPassengerOnInspect && !passenger.HasBeenProcessed)
             stopGate?.Register(passenger);
 
-        inspectUI?.Show(passenger);
-        questionUI?.Clear();
-        fareUI?.Hide();
-        panelSwitcher?.Show(InspectionPanelType.Id);
-
+        deskUI?.Open(passenger, driverWallet, fareTable);
         EnterInspectionMode();
     }
 
     public void ClearInspection()
     {
         current = null;
-        openingLine = string.Empty;
-        questionTabOpenedOnce = false;
-        selectedChangeDenominations.Clear();
-        inspectUI?.Hide();
-        questionUI?.Clear();
-        fareUI?.Hide();
-        panelSwitcher?.HideAll();
+        viewOnlyPaused = false;
+        deskUI?.CloseAndForgetCurrent(false);
     }
 
     public void RegisterPendingPassenger(Passenger passenger)
@@ -119,118 +110,12 @@ public sealed class PassengerInspection : MonoBehaviour
         stopGate?.Register(passenger);
     }
 
-    public void OpenIdTab()
-    {
-        if (current == null)
-            return;
-
-        panelSwitcher?.Show(InspectionPanelType.Id);
-        inspectUI?.Show(current);
-    }
-
-    public void OpenQuestionsTab()
-    {
-        if (current == null)
-            return;
-
-        panelSwitcher?.Show(InspectionPanelType.Questions);
-
-        if (!questionTabOpenedOnce)
-        {
-            questionUI?.Show("Passenger", openingLine);
-            questionTabOpenedOnce = true;
-        }
-        else
-        {
-            questionUI?.ActivateAndReplayLast();
-        }
-    }
-
-    public void OpenFareTab()
-    {
-        if (current == null)
-            return;
-
-        panelSwitcher?.Show(InspectionPanelType.Fare);
-        fareUI?.Show(current, driverWallet, fareTable);
-        fareUI?.Refresh(selectedChangeDenominations);
-    }
-
     public void AskCurrentQuestion(PassengerQuestionType questionType)
     {
         if (current == null)
             return;
 
-        panelSwitcher?.Show(InspectionPanelType.Questions);
-        questionTabOpenedOnce = true;
-
-        string prompt = questionType switch
-        {
-            PassengerQuestionType.CurrentStop => "What stop is this?",
-            PassengerQuestionType.DestinationStop => "Where are you getting off?",
-            PassengerQuestionType.Seat => "Which seat is yours?",
-            PassengerQuestionType.Fare => "How are you paying?",
-            _ => "Question"
-        };
-
-        string answer = current.GetAnswer(questionType);
-        questionUI?.Show(prompt, answer);
-    }
-
-    public void AddChangeDenomination(int denominationPence)
-    {
-        if (current == null || denominationPence <= 0)
-            return;
-
-        selectedChangeDenominations.Add(denominationPence);
-        fareUI?.Refresh(selectedChangeDenominations);
-    }
-
-    public void RemoveLastChangeDenomination()
-    {
-        if (selectedChangeDenominations.Count <= 0)
-            return;
-
-        selectedChangeDenominations.RemoveAt(selectedChangeDenominations.Count - 1);
-        fareUI?.Refresh(selectedChangeDenominations);
-    }
-
-    public void ClearSelectedChange()
-    {
-        selectedChangeDenominations.Clear();
-        fareUI?.Refresh(selectedChangeDenominations);
-    }
-
-    public void AutoSelectCorrectChange()
-    {
-        if (current == null)
-            return;
-
-        selectedChangeDenominations.Clear();
-
-        if (!current.UsesCash || current.ChangeDuePence <= 0)
-        {
-            fareUI?.Refresh(selectedChangeDenominations);
-            return;
-        }
-
-        if (driverWallet == null)
-        {
-            AskPaymentMessage("No driver wallet found in the scene.");
-            fareUI?.Refresh(selectedChangeDenominations);
-            return;
-        }
-
-        if (driverWallet.TryPreviewExactChangeAfterTender(current.GetTenderedDenominationsCopy(), current.ChangeDuePence, out List<int> plan))
-        {
-            selectedChangeDenominations.AddRange(plan);
-        }
-        else
-        {
-            AskPaymentMessage("You can't make the exact change from the current float.");
-        }
-
-        fareUI?.Refresh(selectedChangeDenominations);
+        deskUI?.AskLegacyQuestion(questionType);
     }
 
     public void AcceptCurrent()
@@ -238,13 +123,14 @@ public sealed class PassengerInspection : MonoBehaviour
         if (current == null)
             return;
 
-        bool fareCorrect;
-        if (!TryResolveFare(out fareCorrect, out string paymentFailure))
+        int notReturnedCount = deskUI != null ? deskUI.GetImportantPassengerItemsOutsideSharedTrayCount() : 0;
+        if (notReturnedCount > 0 && Random.value < rareReturnReminderChance)
         {
-            AskPaymentMessage(paymentFailure);
-            fareUI?.Refresh(selectedChangeDenominations);
+            deskUI?.Say("Hang on - you still have my stuff.");
             return;
         }
+
+        bool fareCorrect = deskUI == null || deskUI.IsFareCorrect();
 
         if (current.IsAnomaly)
             scoreManager?.Add(wrongAnomalyAccept);
@@ -261,10 +147,10 @@ public sealed class PassengerInspection : MonoBehaviour
         }
 
         current.MarkProcessed(seated);
-        ResolveAndClose();
+        ResolveAndClose(true);
     }
 
-    public void RejectCurrent()
+    public void DenyCurrent()
     {
         if (current == null)
             return;
@@ -282,84 +168,26 @@ public sealed class PassengerInspection : MonoBehaviour
         if (SeatManager.Instance != null)
             SeatManager.Instance.NotifyPassengerRemoved(target);
 
-        ResolveAndClose();
+        ResolveAndClose(false);
         Destroy(target.gameObject);
     }
 
-    private bool TryResolveFare(out bool fareCorrect, out string paymentFailure)
-    {
-        fareCorrect = false;
-        paymentFailure = string.Empty;
-
-        if (current == null)
-        {
-            paymentFailure = "No passenger selected.";
-            return false;
-        }
-
-        if (current.UsesDayRider)
-        {
-            fareCorrect = current.IsDayRiderValid;
-            return true;
-        }
-
-        if (driverWallet == null)
-        {
-            paymentFailure = "No DriverWallet assigned. Add one to the scene first.";
-            return false;
-        }
-
-        if (!driverWallet.TryApplyCashTransaction(current.GetTenderedDenominationsCopy(), selectedChangeDenominations, out paymentFailure))
-            return false;
-
-        int selectedChange = GetSelectedChangeTotal();
-        fareCorrect = current.CashTenderedPence >= current.ExpectedFare && selectedChange == current.ChangeDuePence;
-        return true;
-    }
-
-    private int GetSelectedChangeTotal()
-    {
-        int total = 0;
-        for (int i = 0; i < selectedChangeDenominations.Count; i++)
-            total += Mathf.Max(0, selectedChangeDenominations[i]);
-        return total;
-    }
-
-    private void ResolveAndClose()
+    private void ResolveAndClose(bool accepted)
     {
         if (current != null)
             stopGate?.Resolve(current);
 
+        deskUI?.CloseAndForgetCurrent(accepted);
         current = null;
-        openingLine = string.Empty;
-        questionTabOpenedOnce = false;
-        selectedChangeDenominations.Clear();
-        inspectUI?.Hide();
-        questionUI?.Clear();
-        fareUI?.Hide();
-        panelSwitcher?.HideAll();
-
+        viewOnlyPaused = false;
         ExitInspectionMode();
     }
 
-    private void ClearInspectionAndResumeLook()
+    private void PauseInspectionAndResumeLook()
     {
-        current = null;
-        openingLine = string.Empty;
-        questionTabOpenedOnce = false;
-        selectedChangeDenominations.Clear();
-        inspectUI?.Hide();
-        questionUI?.Clear();
-        fareUI?.Hide();
-        panelSwitcher?.HideAll();
+        viewOnlyPaused = true;
+        deskUI?.HideViewOnly();
         ExitInspectionMode();
-    }
-
-    private void AskPaymentMessage(string message)
-    {
-        panelSwitcher?.Show(InspectionPanelType.Questions);
-        questionTabOpenedOnce = true;
-        questionUI?.Show("Payment", message);
     }
 
     private void EnterInspectionMode()
@@ -424,35 +252,9 @@ public sealed class PassengerInspection : MonoBehaviour
 
             bool moved = SeatManager.Instance.TryTeleportToSeat(passenger, seat, false);
             if (moved)
-            {
-                Debug.Log($"Passenger seated: {passenger.PassengerName} -> {seat.name}");
                 return true;
-            }
         }
 
-        Debug.LogWarning($"No free seat found for {passenger.PassengerName}");
         return false;
-    }
-
-    private static T FindSceneObject<T>() where T : Component
-    {
-        T active = FindFirstObjectByType<T>();
-        if (active != null)
-            return active;
-
-        T[] all = Resources.FindObjectsOfTypeAll<T>();
-        for (int i = 0; i < all.Length; i++)
-        {
-            T item = all[i];
-            if (item == null || item.gameObject == null)
-                continue;
-
-            if (!item.gameObject.scene.IsValid())
-                continue;
-
-            return item;
-        }
-
-        return null;
     }
 }

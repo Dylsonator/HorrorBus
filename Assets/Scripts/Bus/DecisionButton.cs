@@ -1,6 +1,10 @@
 using UnityEngine;
 
-public enum DecisionButtonType { Accept, Reject }
+public enum DecisionButtonType
+{
+    Accept,
+    Reject
+}
 
 public sealed class DecisionButton : MonoBehaviour
 {
@@ -15,9 +19,12 @@ public sealed class DecisionButton : MonoBehaviour
 
     public void Press()
     {
-        if (inspection == null) return;
+        if (inspection == null)
+            return;
 
-        if (type == DecisionButtonType.Accept) inspection.AcceptCurrent();
-        else inspection.RejectCurrent();
+        if (type == DecisionButtonType.Accept)
+            inspection.AcceptCurrent();
+        else
+            inspection.DenyCurrent(); // use the new desk-system reject path
     }
 }

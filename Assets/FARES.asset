@@ -12,4 +12,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 07beda4e071a116448827e21e985631f, type: 3}
   m_Name: FARES
   m_EditorClassIdentifier: 
-  fares: 00000000020000000300000004000000050000000600000007000000
+  shortFarePence: 180
+  mediumFarePence: 260
+  longFarePence: 340
+  dayRiderPricePence: 450
+  shortMaxStops: 2
+  mediumMaxStops: 4
+  denominations:
+  - label: "\xA320"
+    valuePence: 2000
+    startingCount: 2
+  - label: "\xA310"
+    valuePence: 1000
+    startingCount: 2
+  - label: "\xA35"
+    valuePence: 500
+    startingCount: 4
+  - label: "\xA31"
+    valuePence: 100
+    startingCount: 8
+  - label: 50p
+    valuePence: 50
+    startingCount: 12
+  - label: 20p
+    valuePence: 20
+    startingCount: 14
+  - label: 10p
+    valuePence: 10
+    startingCount: 14
+  - label: 5p
+    valuePence: 5
+    startingCount: 16
