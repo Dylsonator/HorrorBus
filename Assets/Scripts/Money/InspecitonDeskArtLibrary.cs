@@ -81,6 +81,23 @@ public sealed class InspectionDeskArtLibrary : MonoBehaviour
             PassengerIdVisual.FakeAlt1 => "id_fake_alt1",
             PassengerIdVisual.FakeAlt2 => "id_fake_alt2",
             PassengerIdVisual.FakeAlt3 => "id_fake_alt3",
+            PassengerIdVisual.FakeAlt4 => "id_fake_alt4",
+            PassengerIdVisual.FakeAlt5 => "id_fake_alt5",
+            PassengerIdVisual.FakeAlt6 => "id_fake_alt6",
+            PassengerIdVisual.FakeAlt7 => "id_fake_alt7",
+            PassengerIdVisual.FakeAlt8 => "id_fake_alt8",
+            PassengerIdVisual.FakeAlt9 => "id_fake_alt9",
+            PassengerIdVisual.FakeAlt10 => "id_fake_alt10",
+            PassengerIdVisual.FakeAlt11 => "id_fake_alt11",
+            PassengerIdVisual.FakeAlt12 => "id_fake_alt12",
+            PassengerIdVisual.FakeAlt13 => "id_fake_alt13",
+            PassengerIdVisual.FakeAlt14 => "id_fake_alt14",
+            PassengerIdVisual.FakeAlt15 => "id_fake_alt15",
+            PassengerIdVisual.FakeAlt16 => "id_fake_alt16",
+            PassengerIdVisual.FakeAlt17 => "id_fake_alt17",
+            PassengerIdVisual.FakeAlt18 => "id_fake_alt18",
+            PassengerIdVisual.FakeAlt19 => "id_fake_alt19",
+            PassengerIdVisual.FakeAlt20 => "id_fake_alt20",
             _ => "id_real"
         };
     }
@@ -112,15 +129,15 @@ public sealed class InspectionDeskArtLibrary : MonoBehaviour
     private Vector2 GetFallbackSizeForKey(string key, int moneyValuePence)
     {
         if (key.StartsWith("money_", StringComparison.OrdinalIgnoreCase))
-            return moneyValuePence >= 500 ? new Vector2(136f, 92f) : new Vector2(64f, 64f);
+            return moneyValuePence >= 500 ? new Vector2(96f, 64f) : new Vector2(24f, 24f);
 
         if (key.StartsWith("id_", StringComparison.OrdinalIgnoreCase))
-            return new Vector2(250f, 150f);
+            return new Vector2(160f, 96f);
 
         if (key.StartsWith("ticket_", StringComparison.OrdinalIgnoreCase))
-            return new Vector2(180f, 90f);
+            return new Vector2(120f, 60f);
 
-        return new Vector2(180f, 100f);
+        return new Vector2(120f, 70f);
     }
 
     private void RebuildCache()

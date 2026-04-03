@@ -14,6 +14,12 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
     [SerializeField] private TMP_Text subtitleText;
     [SerializeField] private RectTransform artRoot;
 
+    [Header("Optional ID slot texts")]
+    [SerializeField] private TMP_Text idNameText;
+    [SerializeField] private TMP_Text idDobText;
+    [SerializeField] private TMP_Text idNumberText;
+    [SerializeField] private TMP_Text idExpiryText;
+
     private InspectionDeskUI owner;
     private RectTransform rect;
     private CanvasGroup canvasGroup;
@@ -91,20 +97,36 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
                 StretchChildToArtRoot(artOverlayImage.rectTransform);
             }
 
+            bool useIdSlots = Data != null &&
+                              Data.kind == InspectionDeskItemKind.IdCard &&
+                              !Data.preferArtOnly &&
+                              HasIdSlotTexts();
+
+            if (useIdSlots)
+            {
+                ApplyIdSlotTexts();
+                SetGenericTextsVisible(false);
+            }
+            else
+            {
+                ClearIdSlotTexts();
+                SetIdSlotTextsVisible(false);
+
+                if (titleText != null)
+                {
+                    titleText.text = Data != null ? Data.title : string.Empty;
+                    titleText.gameObject.SetActive(!hideText);
+                }
+
+                if (subtitleText != null)
+                {
+                    subtitleText.text = Data != null ? Data.subtitle : string.Empty;
+                    subtitleText.gameObject.SetActive(!hideText && !string.IsNullOrWhiteSpace(subtitleText.text));
+                }
+            }
+
             if (background != null)
                 background.color = new Color(0f, 0f, 0f, 0f);
-
-            if (titleText != null)
-            {
-                titleText.text = Data != null ? Data.title : string.Empty;
-                titleText.gameObject.SetActive(!hideText);
-            }
-
-            if (subtitleText != null)
-            {
-                subtitleText.text = Data != null ? Data.subtitle : string.Empty;
-                subtitleText.gameObject.SetActive(!hideText && !string.IsNullOrWhiteSpace(subtitleText.text));
-            }
 
             return;
         }
@@ -127,6 +149,9 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
 
         ApplySize(fallbackSize);
 
+        ClearIdSlotTexts();
+        SetIdSlotTextsVisible(false);
+
         if (background != null)
         {
             Color tint = (Data != null && owner != null)
@@ -147,6 +172,64 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
             subtitleText.text = Data != null ? Data.subtitle : string.Empty;
             subtitleText.gameObject.SetActive(!string.IsNullOrWhiteSpace(subtitleText.text));
         }
+    }
+
+    private bool HasIdSlotTexts()
+    {
+        return idNameText != null || idDobText != null || idNumberText != null || idExpiryText != null;
+    }
+
+    private void ApplyIdSlotTexts()
+    {
+        string name = Data != null ? Data.title : string.Empty;
+        string dob = string.Empty;
+        string idNumber = string.Empty;
+        string expiry = string.Empty;
+
+        if (Data != null && !string.IsNullOrWhiteSpace(Data.subtitle))
+        {
+            string[] lines = Data.subtitle.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+
+                if (line.StartsWith("DOB "))
+                    dob = line.Substring(4).Trim();
+                else if (line.StartsWith("ID "))
+                    idNumber = line.Substring(3).Trim();
+                else if (line.StartsWith("EXP "))
+                    expiry = line.Substring(4).Trim();
+            }
+        }
+
+        if (idNameText != null) idNameText.text = name;
+        if (idDobText != null) idDobText.text = dob;
+        if (idNumberText != null) idNumberText.text = idNumber;
+        if (idExpiryText != null) idExpiryText.text = expiry;
+
+        SetIdSlotTextsVisible(true);
+    }
+
+    private void ClearIdSlotTexts()
+    {
+        if (idNameText != null) idNameText.text = string.Empty;
+        if (idDobText != null) idDobText.text = string.Empty;
+        if (idNumberText != null) idNumberText.text = string.Empty;
+        if (idExpiryText != null) idExpiryText.text = string.Empty;
+    }
+
+    private void SetIdSlotTextsVisible(bool visible)
+    {
+        if (idNameText != null) idNameText.gameObject.SetActive(visible);
+        if (idDobText != null) idDobText.gameObject.SetActive(visible);
+        if (idNumberText != null) idNumberText.gameObject.SetActive(visible);
+        if (idExpiryText != null) idExpiryText.gameObject.SetActive(visible);
+    }
+
+    private void SetGenericTextsVisible(bool visible)
+    {
+        if (titleText != null) titleText.gameObject.SetActive(visible);
+        if (subtitleText != null) subtitleText.gameObject.SetActive(visible);
     }
 
     private void ApplySize(Vector2 targetSize)
@@ -200,10 +283,12 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
         if (child == null)
             return;
 
-        child.anchorMin = new Vector2(0.5f, 0.5f);
-        child.anchorMax = new Vector2(0.5f, 0.5f);
+        child.anchorMin = new Vector2(0f, 0f);
+        child.anchorMax = new Vector2(1f, 1f);
         child.pivot = new Vector2(0.5f, 0.5f);
         child.anchoredPosition = Vector2.zero;
+        child.offsetMin = Vector2.zero;
+        child.offsetMax = Vector2.zero;
         child.localScale = Vector3.one;
         child.localRotation = Quaternion.identity;
     }

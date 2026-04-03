@@ -111,7 +111,7 @@ public class AnomalyController : MonoBehaviour
                 break;
 
             case AnomalySkill.Mid:
-                passenger.SetIdVisual((PassengerIdVisual)Random.Range(2, 5)); // FakeAlt1..FakeAlt3
+                passenger.SetIdVisual((PassengerIdVisual)Random.Range((int)PassengerIdVisual.FakeAlt1, (int)PassengerIdVisual.FakeAlt20 + 1));
                 break;
 
             case AnomalySkill.High:

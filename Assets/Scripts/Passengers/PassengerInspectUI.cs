@@ -21,10 +21,8 @@ public sealed class PassengerInspectUI : MonoBehaviour
     [SerializeField] private Sprite trueBaseSprite;
     [SerializeField] private Sprite trueTopSprite;
 
-    [Header("Subtle Fake Top Layers")]
-    [SerializeField] private Sprite fakeAlt1TopSprite;
-    [SerializeField] private Sprite fakeAlt2TopSprite;
-    [SerializeField] private Sprite fakeAlt3TopSprite;
+    [Header("Subtle Fake Top Layers (1..20)")]
+    [SerializeField] private Sprite[] fakeTopSprites;
 
     [Header("Obvious Fake Full Card")]
     [SerializeField] private Sprite obviousFakeFullSprite;
@@ -69,21 +67,15 @@ public sealed class PassengerInspectUI : MonoBehaviour
                 SetFullFake(obviousFakeFullSprite);
                 break;
 
-            case PassengerIdVisual.FakeAlt1:
-                SetLayeredCard(trueBaseSprite, fakeAlt1TopSprite != null ? fakeAlt1TopSprite : trueTopSprite);
-                break;
-
-            case PassengerIdVisual.FakeAlt2:
-                SetLayeredCard(trueBaseSprite, fakeAlt2TopSprite != null ? fakeAlt2TopSprite : trueTopSprite);
-                break;
-
-            case PassengerIdVisual.FakeAlt3:
-                SetLayeredCard(trueBaseSprite, fakeAlt3TopSprite != null ? fakeAlt3TopSprite : trueTopSprite);
-                break;
-
             default:
-                SetLayeredCard(trueBaseSprite, trueTopSprite);
-                break;
+                {
+                    int fakeIndex = GetFakeVariantIndex(passenger.IdVisual);
+                    if (fakeIndex >= 0 && fakeTopSprites != null && fakeIndex < fakeTopSprites.Length && fakeTopSprites[fakeIndex] != null)
+                        SetLayeredCard(trueBaseSprite, fakeTopSprites[fakeIndex]);
+                    else
+                        SetLayeredCard(trueBaseSprite, trueTopSprite);
+                    break;
+                }
         }
     }
 
@@ -111,6 +103,34 @@ public sealed class PassengerInspectUI : MonoBehaviour
 
         if (expiryText != null)
             expiryText.text = passenger.ExpiryDate;
+    }
+
+    private int GetFakeVariantIndex(PassengerIdVisual visual)
+    {
+        return visual switch
+        {
+            PassengerIdVisual.FakeAlt1 => 0,
+            PassengerIdVisual.FakeAlt2 => 1,
+            PassengerIdVisual.FakeAlt3 => 2,
+            PassengerIdVisual.FakeAlt4 => 3,
+            PassengerIdVisual.FakeAlt5 => 4,
+            PassengerIdVisual.FakeAlt6 => 5,
+            PassengerIdVisual.FakeAlt7 => 6,
+            PassengerIdVisual.FakeAlt8 => 7,
+            PassengerIdVisual.FakeAlt9 => 8,
+            PassengerIdVisual.FakeAlt10 => 9,
+            PassengerIdVisual.FakeAlt11 => 10,
+            PassengerIdVisual.FakeAlt12 => 11,
+            PassengerIdVisual.FakeAlt13 => 12,
+            PassengerIdVisual.FakeAlt14 => 13,
+            PassengerIdVisual.FakeAlt15 => 14,
+            PassengerIdVisual.FakeAlt16 => 15,
+            PassengerIdVisual.FakeAlt17 => 16,
+            PassengerIdVisual.FakeAlt18 => 17,
+            PassengerIdVisual.FakeAlt19 => 18,
+            PassengerIdVisual.FakeAlt20 => 19,
+            _ => -1
+        };
     }
 
     private void SetLayeredCard(Sprite baseSprite, Sprite topSprite)

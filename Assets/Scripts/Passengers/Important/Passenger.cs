@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,7 +7,24 @@ public enum PassengerIdVisual
     ObviousFake,
     FakeAlt1,
     FakeAlt2,
-    FakeAlt3
+    FakeAlt3,
+    FakeAlt4,
+    FakeAlt5,
+    FakeAlt6,
+    FakeAlt7,
+    FakeAlt8,
+    FakeAlt9,
+    FakeAlt10,
+    FakeAlt11,
+    FakeAlt12,
+    FakeAlt13,
+    FakeAlt14,
+    FakeAlt15,
+    FakeAlt16,
+    FakeAlt17,
+    FakeAlt18,
+    FakeAlt19,
+    FakeAlt20
 }
 
 public enum PassengerQuestionType
@@ -231,15 +247,14 @@ public class Passenger : MonoBehaviour
             deskPaymentPresented = true;
             List<InspectionDeskItemState> temp = new List<InspectionDeskItemState>();
             AddPaymentItems(temp);
+
             if (temp.Count > 0)
             {
                 newItem = temp[0];
-                if (temp.Count > 1)
-                {
-                    // only reveal one at a time automatically
-                    for (int i = 1; i < temp.Count; i++)
-                        spawnedDeskIds.Remove(temp[i].uniqueId);
-                }
+
+                // Keep the rest marked as not spawned yet so the desk UI can spawn them too
+                for (int i = 1; i < temp.Count; i++)
+                    spawnedDeskIds.Remove(temp[i].uniqueId);
 
                 line = Say(
                     "Hang on, I forgot the money.",
@@ -249,6 +264,7 @@ public class Passenger : MonoBehaviour
                 return true;
             }
         }
+
 
         if (!deskTicketPresented && UsesDayRider)
         {
@@ -567,6 +583,7 @@ public class Passenger : MonoBehaviour
     public void SetIdNumber(string value) => idNumber = value;
     public void SetExpiryDate(string value) => expiryDate = value;
     public void SetExpectedFare(int pence) => ExpectedFare = Mathf.Max(0, pence);
+
     public void SetPaidAmount(int pence)
     {
         PaidAmount = Mathf.Max(0, pence);
@@ -781,17 +798,20 @@ public class Passenger : MonoBehaviour
 
     private void AddIdItem(List<InspectionDeskItemState> output)
     {
+        bool fakeId = idVisual != PassengerIdVisual.Real;
+
         AddIfNotSpawned(output, new InspectionDeskItemState
         {
             uniqueId = "passenger_id",
             kind = InspectionDeskItemKind.IdCard,
-            title = $"{passengerName}",
+            title = passengerName,
             subtitle = $"DOB {dateOfBirth}\nID {idNumber}\nEXP {expiryDate}",
             artKey = InspectionDeskArtLibrary.GetIdArtKey(idVisual),
-            preferredSize = new Vector2(250f, 150f),
-            preferArtOnly = true,
+            preferredSize = new Vector2(160f, 96f),
+            preferArtOnly = fakeId,
             isPassengerOwned = true,
             isImportant = true,
+            isFake = fakeId,
             defaultTopic = InspectionDeskClickTopic.IdCard,
             supportedTopics = new List<InspectionDeskClickTopic>
             {
@@ -837,6 +857,7 @@ public class Passenger : MonoBehaviour
         if (!UsesCash)
             return;
 
+        EnsureTenderedBreakdown(null);
         EnsureFakeMoneyFlags();
 
         for (int i = 0; i < runtimeTendered.Count; i++)
@@ -852,7 +873,7 @@ public class Passenger : MonoBehaviour
                 subtitle = fake ? "looks off" : string.Empty,
                 moneyValuePence = value,
                 artKey = InspectionDeskArtLibrary.GetMoneyArtKey(value),
-                preferredSize = value >= 500 ? new Vector2(136f, 92f) : new Vector2(64f, 64f),
+                preferredSize = value >= 500 ? new Vector2(96f, 64f) : new Vector2(24f, 24f),
                 preferArtOnly = true,
                 isPassengerOwned = true,
                 isImportant = false,
@@ -903,10 +924,15 @@ public class Passenger : MonoBehaviour
         if (UsesDayRider)
             return;
 
+        int[] supported = fareTable != null
+            ? fareTable.GetDenominationValuesDescending()
+            : new[] { 2000, 1000, 500, 200, 100, 50, 20, 10, 5 };
+
         if (tenderedDenominations != null && tenderedDenominations.Length > 0)
         {
             for (int i = 0; i < tenderedDenominations.Length; i++)
-                runtimeTendered.Add(Mathf.Max(0, tenderedDenominations[i]));
+                AppendSupportedBreakdown(runtimeTendered, Mathf.Max(0, tenderedDenominations[i]), supported);
+
             PaidAmount = Sum(runtimeTendered);
             return;
         }
@@ -918,22 +944,25 @@ public class Passenger : MonoBehaviour
         if (total <= 0)
             total = ExpectedFare;
 
-        if (fareTable == null)
-        {
-            runtimeTendered.Add(total);
-            PaidAmount = total;
-            return;
-        }
+        if (total <= 0)
+            total = 5;
 
-        int[] values = fareTable.GetDenominationValuesDescending();
-        int remaining = total;
-
-        // slight chance to wildly overpay with a big note
-        if (remaining < 2000 && Random.value < 0.18f)
+        if (supported != null && supported.Length > 0 && total < 2000 && Random.value < 0.18f)
         {
-            int[] big = new[] { 2000, 1000, 500 };
+            int[] big = { 2000, 1000, 500 };
             int chosen = big[Random.Range(0, big.Length)];
-            if (chosen >= remaining)
+
+            bool supportedBig = false;
+            for (int i = 0; i < supported.Length; i++)
+            {
+                if (supported[i] == chosen)
+                {
+                    supportedBig = true;
+                    break;
+                }
+            }
+
+            if (supportedBig && chosen >= total)
             {
                 runtimeTendered.Add(chosen);
                 PaidAmount = chosen;
@@ -941,27 +970,53 @@ public class Passenger : MonoBehaviour
             }
         }
 
-        for (int i = 0; i < values.Length; i++)
-        {
-            while (remaining >= values[i])
-            {
-                runtimeTendered.Add(values[i]);
-                remaining -= values[i];
-            }
-        }
-
-        if (remaining > 0)
-            runtimeTendered.Add(remaining);
+        AppendSupportedBreakdown(runtimeTendered, total, supported);
 
         if (runtimeTendered.Count == 0)
-            runtimeTendered.Add(total);
+            runtimeTendered.Add(5);
 
         PaidAmount = Sum(runtimeTendered);
     }
 
+    private static void AppendSupportedBreakdown(List<int> output, int amountPence, int[] supportedDescending)
+    {
+        if (output == null || amountPence <= 0)
+            return;
+
+        if (supportedDescending == null || supportedDescending.Length == 0)
+        {
+            output.Add(amountPence);
+            return;
+        }
+
+        int remaining = amountPence;
+
+        for (int i = 0; i < supportedDescending.Length; i++)
+        {
+            int value = supportedDescending[i];
+            if (value <= 0)
+                continue;
+
+            while (remaining >= value)
+            {
+                output.Add(value);
+                remaining -= value;
+            }
+        }
+
+        if (remaining > 0)
+        {
+            int smallest = supportedDescending[supportedDescending.Length - 1];
+            if (smallest > 0)
+                output.Add(smallest);
+        }
+    }
+
     private void EnsureFakeMoneyFlags()
     {
-        if (fakeMoneyIndices.Count > 0 || runtimeTendered.Count == 0)
+        fakeMoneyIndices.Clear();
+
+        if (runtimeTendered.Count == 0)
             return;
 
         float chance = IsAnomaly ? fakeMoneyChanceAnomaly : fakeMoneyChanceHuman;
@@ -969,7 +1024,9 @@ public class Passenger : MonoBehaviour
             return;
 
         int count = Mathf.Max(1, Mathf.RoundToInt(runtimeTendered.Count * (IsAnomaly ? 0.4f : 0.2f)));
-        for (int i = 0; i < count; i++)
+        count = Mathf.Min(count, runtimeTendered.Count);
+
+        while (fakeMoneyIndices.Count < count)
             fakeMoneyIndices.Add(Random.Range(0, runtimeTendered.Count));
     }
 
@@ -1149,7 +1206,8 @@ public class Passenger : MonoBehaviour
     {
         int total = 0;
         if (values == null) return 0;
-        for (int i = 0; i < values.Count; i++) total += Mathf.Max(0, values[i]);
+        for (int i = 0; i < values.Count; i++)
+            total += Mathf.Max(0, values[i]);
         return total;
     }
 
@@ -1171,5 +1229,18 @@ public class Passenger : MonoBehaviour
             picked = options[Random.Range(0, options.Length)];
 
         return picked;
+    }
+    public void RevealMissingPaymentItems(FareTable fareTable, List<InspectionDeskItemState> output)
+    {
+        if (output == null)
+            return;
+
+        PrepareDeskSession(fareTable);
+
+        if (deskPaymentPresented || !UsesCash)
+            return;
+
+        deskPaymentPresented = true;
+        AddPaymentItems(output);
     }
 }

@@ -1,5 +1,4 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 public sealed class PassengerInspection : MonoBehaviour
@@ -72,10 +71,11 @@ public sealed class PassengerInspection : MonoBehaviour
         if (passenger == null)
             return;
 
+        // Reopen same active session without rebuilding desk items
         if (current != null && passenger == current)
         {
             viewOnlyPaused = false;
-            deskUI?.Open(current, driverWallet, fareTable);
+            deskUI?.ShowExistingSession();
             EnterInspectionMode();
             return;
         }

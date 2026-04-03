@@ -86,13 +86,29 @@ public sealed class InspectionDeskUI : MonoBehaviour
             revealTimer = 0f;
             if (currentPassenger.TryAutoRevealMissingItem(currentFareTable, out InspectionDeskItemState revealedItem, out string revealLine))
             {
-                SpawnItemInSharedTray(revealedItem);
+                if (revealedItem != null)
+                    SpawnItemInSharedTray(revealedItem);
+
+                // If the revealed item was payment, make sure the rest of the cash comes out too
+                if (revealedItem != null && revealedItem.kind == InspectionDeskItemKind.Cash)
+                {
+                    List<InspectionDeskItemState> extraCash = new List<InspectionDeskItemState>();
+                    currentPassenger.RevealMissingPaymentItems(currentFareTable, extraCash);
+
+                    for (int i = 0; i < extraCash.Count; i++)
+                    {
+                        if (extraCash[i] == null)
+                            continue;
+
+                        if (revealedItem.uniqueId == extraCash[i].uniqueId)
+                            continue;
+
+                        SpawnItemInSharedTray(extraCash[i]);
+                    }
+                }
+
                 if (!string.IsNullOrWhiteSpace(revealLine))
                     Say(revealLine);
-            }
-            else if (currentPassenger.TryGetIdleChatter(out string chatter))
-            {
-                Say(chatter);
             }
         }
 
@@ -129,6 +145,20 @@ public sealed class InspectionDeskUI : MonoBehaviour
 
             Say(currentPassenger.GetOpeningStatement(), "Passenger");
         }
+
+        UpdateHeaderTexts();
+
+        if (root != null)
+            root.SetActive(true);
+
+        questionPopup?.Hide();
+    }
+
+    // NEW: resume an already-open session without rebuilding any items
+    public void ShowExistingSession()
+    {
+        if (currentPassenger == null)
+            return;
 
         UpdateHeaderTexts();
 
@@ -221,7 +251,6 @@ public sealed class InspectionDeskUI : MonoBehaviour
         return total;
     }
 
-    // ADDED: used by PassengerInspection before accepting someone
     public int GetImportantPassengerItemsOutsideSharedTrayCount()
     {
         int total = 0;
@@ -545,7 +574,7 @@ public sealed class InspectionDeskUI : MonoBehaviour
                 isImportant = false,
                 isTemplateSource = true,
                 artKey = InspectionDeskArtLibrary.GetMoneyArtKey(value),
-                preferredSize = value >= 500 ? new Vector2(136f, 92f) : new Vector2(64f, 64f),
+                preferredSize = value >= 500 ? new Vector2(96f, 64f) : new Vector2(24f, 24f),
                 preferArtOnly = true,
                 defaultTopic = InspectionDeskClickTopic.Money,
                 supportedTopics = new List<InspectionDeskClickTopic> { InspectionDeskClickTopic.Money, InspectionDeskClickTopic.MoneyAmount, InspectionDeskClickTopic.MoneyAuthenticity }

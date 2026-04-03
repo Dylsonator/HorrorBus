@@ -91,6 +91,13 @@ public sealed class InspectionDeskItemState
     public Vector2 preferredSize;
     public bool preferArtOnly = true;
 
+    // NEW: structured ID text fields
+    public bool renderStructuredIdText;
+    public string idDisplayName;
+    public string idDisplayDob;
+    public string idDisplayNumber;
+    public string idDisplayExpiry;
+
     public InspectionDeskItemState Clone()
     {
         return new InspectionDeskItemState
@@ -113,7 +120,12 @@ public sealed class InspectionDeskItemState
                 : new List<InspectionDeskClickTopic>(),
             artKey = artKey,
             preferredSize = preferredSize,
-            preferArtOnly = preferArtOnly
+            preferArtOnly = preferArtOnly,
+            renderStructuredIdText = renderStructuredIdText,
+            idDisplayName = idDisplayName,
+            idDisplayDob = idDisplayDob,
+            idDisplayNumber = idDisplayNumber,
+            idDisplayExpiry = idDisplayExpiry
         };
     }
 }
