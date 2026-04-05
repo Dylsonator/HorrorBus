@@ -14,6 +14,11 @@ public class AnomalyController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float skillChanceMid = 0.35f;
     [SerializeField, Range(0f, 1f)] private float skillChanceHigh = 0.20f;
 
+    [Header("Stolen Real ID")]
+    [SerializeField] private bool allowHighSkillIdentityTheft = true;
+    [SerializeField, Range(0f, 1f)] private float highSkillIdentityTheftChance = 0.85f;
+    [SerializeField] private bool copyFromHumansOnly = true;
+
     [Header("Profile (non-lethal action pool)")]
     [SerializeField] private AnomalyProfile profile;
 
@@ -51,21 +56,27 @@ public class AnomalyController : MonoBehaviour
 
     private void Awake()
     {
-        if (passenger == null) passenger = GetComponent<Passenger>();
+        if (passenger == null)
+            passenger = GetComponent<Passenger>();
 
-        if (busDrive == null) busDrive = FindFirstObjectByType<BusDrive>();
-        if (routeStops == null) routeStops = FindFirstObjectByType<RouteStops>();
+        if (busDrive == null)
+            busDrive = FindFirstObjectByType<BusDrive>();
+
+        if (routeStops == null)
+            routeStops = FindFirstObjectByType<RouteStops>();
 
         if (passenger != null && passenger.IsAnomaly && randomiseSkillOnSpawn)
             AssignRandomSkill();
 
         AssignIdVisualBySkill();
+        TryAssignStolenIdentityOnSpawn();
     }
 
     public void SetSkill(AnomalySkill newSkill)
     {
         skill = newSkill;
         AssignIdVisualBySkill();
+        TryAssignStolenIdentityOnSpawn();
     }
 
     private void AssignRandomSkill()
@@ -122,6 +133,71 @@ public class AnomalyController : MonoBehaviour
                 passenger.SetIdVisual(PassengerIdVisual.Real);
                 break;
         }
+    }
+
+    private void TryAssignStolenIdentityOnSpawn()
+    {
+        if (passenger == null)
+            return;
+
+        if (!passenger.IsAnomaly)
+            return;
+
+        if (!allowHighSkillIdentityTheft)
+            return;
+
+        if (skill != AnomalySkill.High)
+            return;
+
+        if (Random.value > highSkillIdentityTheftChance)
+            return;
+
+        Passenger source = FindIdentitySource();
+        if (source == null)
+            return;
+
+        passenger.SetStolenIdentityFrom(source);
+        Debug.Log($"[ANOMALY] {passenger.PassengerName} stole visible ID from {source.PassengerName}");
+    }
+
+    private Passenger FindIdentitySource()
+    {
+        Passenger best = null;
+
+        for (int i = 0; i < PassengerRegistry.All.Count; i++)
+        {
+            Passenger other = PassengerRegistry.All[i];
+            if (other == null || other == passenger)
+                continue;
+
+            if (copyFromHumansOnly && other.IsAnomaly)
+                continue;
+
+            // Prefer real IDs so the stolen card looks legitimate.
+            if (other.IdVisual != PassengerIdVisual.Real)
+                continue;
+
+            best = other;
+            break;
+        }
+
+        if (best == null)
+        {
+            for (int i = 0; i < PassengerRegistry.All.Count; i++)
+            {
+                Passenger other = PassengerRegistry.All[i];
+                if (other == null || other == passenger)
+                    continue;
+
+                if (copyFromHumansOnly && other.IsAnomaly)
+                    continue;
+
+                best = other;
+                break;
+            }
+        }
+
+        return best;
     }
 
     private void Update()

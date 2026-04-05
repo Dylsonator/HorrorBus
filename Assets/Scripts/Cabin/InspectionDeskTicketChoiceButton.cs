@@ -1,4 +1,3 @@
-
 using UnityEngine;
 
 public sealed class InspectionDeskTicketChoiceButton : MonoBehaviour
@@ -17,6 +16,6 @@ public sealed class InspectionDeskTicketChoiceButton : MonoBehaviour
         if (deskUI == null)
             return;
 
-        deskUI.SetSelectedTicketBand(ticketBand);
+        deskUI.PrintTicket(ticketBand);
     }
 }

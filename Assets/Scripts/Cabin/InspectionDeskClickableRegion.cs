@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -18,6 +17,6 @@ public sealed class InspectionDeskClickableRegion : MonoBehaviour, IPointerClick
         if (itemView == null)
             return;
 
-        itemView.NotifyRegionClicked(topic, eventData.position);
+        itemView.NotifyRegionClicked(topic, eventData.position, eventData.pressEventCamera);
     }
 }

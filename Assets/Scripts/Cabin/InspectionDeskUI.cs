@@ -41,6 +41,9 @@ public sealed class InspectionDeskUI : MonoBehaviour
     [SerializeField] private float autoRevealInterval = 4f;
     [SerializeField] private float interferenceInterval = 7f;
 
+    [Header("Debug")]
+    [SerializeField] private bool debugFloatSlots = false;
+
     public event Action SeatRequested;
     public event Action DenyRequested;
 
@@ -63,14 +66,18 @@ public sealed class InspectionDeskUI : MonoBehaviour
         if (itemLayer == null) itemLayer = transform as RectTransform;
         if (artLibrary == null) artLibrary = FindFirstObjectByType<InspectionDeskArtLibrary>(FindObjectsInactive.Include);
 
-        if ((floatSlots == null || floatSlots.Length == 0) && floatTrayZone != null)
-            floatSlots = floatTrayZone.GetComponentsInChildren<InspectionDeskFloatSlot>(true);
+        RefreshFloatSlots();
 
-        if (seatButton != null) seatButton.onClick.AddListener(() => SeatRequested?.Invoke());
+        if (seatButton != null) seatButton.onClick.AddListener(OnSeatPressed);
         if (denyButton != null) denyButton.onClick.AddListener(() => DenyRequested?.Invoke());
 
         if (root != null)
             root.SetActive(false);
+    }
+
+    private void OnValidate()
+    {
+        RefreshFloatSlots();
     }
 
     private void Update()
@@ -84,31 +91,33 @@ public sealed class InspectionDeskUI : MonoBehaviour
         if (revealTimer >= autoRevealInterval)
         {
             revealTimer = 0f;
+
             if (currentPassenger.TryAutoRevealMissingItem(currentFareTable, out InspectionDeskItemState revealedItem, out string revealLine))
             {
                 if (revealedItem != null)
-                    SpawnItemInSharedTray(revealedItem);
-
-                // If the revealed item was payment, make sure the rest of the cash comes out too
-                if (revealedItem != null && revealedItem.kind == InspectionDeskItemKind.Cash)
                 {
-                    List<InspectionDeskItemState> extraCash = new List<InspectionDeskItemState>();
-                    currentPassenger.RevealMissingPaymentItems(currentFareTable, extraCash);
-
-                    for (int i = 0; i < extraCash.Count; i++)
+                    if (revealedItem.kind == InspectionDeskItemKind.Cash && currentPassenger.UsesCash)
                     {
-                        if (extraCash[i] == null)
-                            continue;
+                        List<InspectionDeskItemState> remainingPaymentItems = new List<InspectionDeskItemState>();
+                        currentPassenger.CollectCurrentPaymentItems(remainingPaymentItems);
 
-                        if (revealedItem.uniqueId == extraCash[i].uniqueId)
-                            continue;
+                        SpawnItemInSharedTray(revealedItem);
 
-                        SpawnItemInSharedTray(extraCash[i]);
+                        for (int i = 0; i < remainingPaymentItems.Count; i++)
+                            SpawnItemInSharedTray(remainingPaymentItems[i]);
+                    }
+                    else
+                    {
+                        SpawnItemInSharedTray(revealedItem);
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(revealLine))
                     Say(revealLine);
+            }
+            else if (currentPassenger.TryGetIdleChatter(out string chatter))
+            {
+                Say(chatter);
             }
         }
 
@@ -128,6 +137,8 @@ public sealed class InspectionDeskUI : MonoBehaviour
         selectedTicketBand = TicketBand.None;
         revealTimer = 0f;
         interferenceTimer = 0f;
+
+        RefreshFloatSlots();
 
         if (currentPassenger != null)
             currentPassenger.PrepareDeskSession(currentFareTable);
@@ -154,7 +165,6 @@ public sealed class InspectionDeskUI : MonoBehaviour
         questionPopup?.Hide();
     }
 
-    // NEW: resume an already-open session without rebuilding any items
     public void ShowExistingSession()
     {
         if (currentPassenger == null)
@@ -187,6 +197,41 @@ public sealed class InspectionDeskUI : MonoBehaviour
             root.SetActive(false);
     }
 
+    private void OnSeatPressed()
+    {
+        if (currentPassenger != null && !currentPassenger.IsAnomaly)
+        {
+            bool humanHasIdInSharedTray = false;
+
+            for (int i = 0; i < runtimeItems.Count; i++)
+            {
+                InspectionDeskItemView item = runtimeItems[i];
+                if (item == null || item.Data == null)
+                    continue;
+
+                if (!item.Data.isPassengerOwned)
+                    continue;
+
+                if (item.Data.kind != InspectionDeskItemKind.IdCard)
+                    continue;
+
+                if (!IsItemInsideZone(item, sharedTrayZone))
+                    continue;
+
+                humanHasIdInSharedTray = true;
+                break;
+            }
+
+            if (!humanHasIdInSharedTray)
+            {
+                Say("Hang on. You still need to give them their ID back.", "Driver");
+                return;
+            }
+        }
+
+        SeatRequested?.Invoke();
+    }
+
     public void SetSelectedTicketBand(TicketBand band)
     {
         selectedTicketBand = band;
@@ -199,6 +244,116 @@ public sealed class InspectionDeskUI : MonoBehaviour
     }
 
     public TicketBand GetSelectedTicketBand() => selectedTicketBand;
+
+    public void PrintTicket(TicketBand band)
+    {
+        if (currentPassenger == null)
+            return;
+
+        if (band == TicketBand.None)
+            return;
+
+        SetSelectedTicketBand(band);
+        RemoveExistingIssuedTickets();
+
+        string todayText = System.DateTime.Now.ToString("dd/MM/yyyy");
+
+        string title;
+        string dateLine;
+        string routeLine;
+
+        switch (band)
+        {
+            case TicketBand.Short:
+                title = "SHORT";
+                dateLine = todayText;
+                routeLine = "1-2 STOPS";
+                break;
+
+            case TicketBand.Medium:
+                title = "MEDIUM";
+                dateLine = todayText;
+                routeLine = "3-4 STOPS";
+                break;
+
+            case TicketBand.Long:
+                title = "LONG";
+                dateLine = todayText;
+                routeLine = "5+ STOPS";
+                break;
+
+            case TicketBand.DayRider:
+                title = "DAYRIDER";
+                dateLine = todayText;
+                routeLine = "ALL DAY";
+                break;
+
+            default:
+                title = "TICKET";
+                dateLine = todayText;
+                routeLine = "ROUTE 4";
+                break;
+        }
+
+        InspectionDeskItemState printed = new InspectionDeskItemState
+        {
+            uniqueId = $"issued_ticket_{band}",
+            kind = InspectionDeskItemKind.Ticket,
+            title = title,
+            subtitle = $"{dateLine}\n{routeLine}",
+            isPassengerOwned = false,
+            isImportant = true,
+            isFake = false,
+            artKey = InspectionDeskArtLibrary.GetTicketArtKey(PassengerTicketState.Valid),
+            preferredSize = new Vector2(120f, 60f),
+            preferArtOnly = false,
+            defaultTopic = InspectionDeskClickTopic.Ticket,
+            supportedTopics = new List<InspectionDeskClickTopic>
+            {
+                InspectionDeskClickTopic.Ticket,
+                InspectionDeskClickTopic.TicketValidity,
+                InspectionDeskClickTopic.TicketRoute
+            }
+        };
+
+        Vector2 pos = reviewAreaZone != null
+            ? reviewAreaZone.GetRandomAnchoredPointWithin(itemLayer)
+            : Vector2.zero;
+
+        SpawnView(printed, pos);
+        Say($"Printed {title} ticket.");
+    }
+
+    public int GetImportantIssuedTicketsOutsideSharedTrayCount()
+    {
+        int total = 0;
+
+        for (int i = 0; i < runtimeItems.Count; i++)
+        {
+            InspectionDeskItemView item = runtimeItems[i];
+            if (item == null || item.Data == null)
+                continue;
+
+            if (item.Data.kind != InspectionDeskItemKind.Ticket)
+                continue;
+
+            if (item.Data.isPassengerOwned)
+                continue;
+
+            if (!item.Data.isImportant)
+                continue;
+
+            if (item.Data.isEvidenceReference)
+                continue;
+
+            if (IsItemInsideZone(item, sharedTrayZone))
+                continue;
+
+            total++;
+        }
+
+        return total;
+    }
 
     public bool IsFareCorrect()
     {
@@ -292,7 +447,7 @@ public sealed class InspectionDeskUI : MonoBehaviour
 
             if (!item.Data.isPassengerOwned)
             {
-                if (item.Data.kind == InspectionDeskItemKind.Cash && !item.Data.isEvidenceReference)
+                if ((item.Data.kind == InspectionDeskItemKind.Cash || item.Data.kind == InspectionDeskItemKind.Ticket) && !item.Data.isEvidenceReference)
                 {
                     Destroy(item.gameObject);
                     runtimeItems.RemoveAt(i);
@@ -343,22 +498,56 @@ public sealed class InspectionDeskUI : MonoBehaviour
         ClampToCanvas(item);
     }
 
-    public void HandleItemClick(InspectionDeskItemView item, Vector2 screenPoint, InspectionDeskClickTopic? forcedTopic)
+    public void HandleItemClick(InspectionDeskItemView item, Vector2 screenPoint, Camera eventCamera, InspectionDeskClickTopic? forcedTopic)
     {
         if (item == null || item.Data == null || currentPassenger == null)
             return;
 
-        InspectionDeskClickTopic topic = forcedTopic ?? item.Data.defaultTopic;
+        questionPopup?.Hide();
+
+        InspectionDeskClickTopic primaryTopic = forcedTopic ?? item.Data.defaultTopic;
         List<InspectionDeskQuestionOption> options = new List<InspectionDeskQuestionOption>();
-        currentPassenger.BuildQuestionOptions(topic, item.Data, options);
+        HashSet<string> seenIds = new HashSet<string>();
+
+        void AddOptionsForTopic(InspectionDeskClickTopic topic)
+        {
+            List<InspectionDeskQuestionOption> temp = new List<InspectionDeskQuestionOption>();
+            currentPassenger.BuildQuestionOptions(topic, item.Data, temp);
+
+            for (int i = 0; i < temp.Count; i++)
+            {
+                InspectionDeskQuestionOption opt = temp[i];
+                if (opt == null || string.IsNullOrWhiteSpace(opt.id))
+                    continue;
+
+                if (seenIds.Add(opt.id))
+                    options.Add(opt);
+            }
+        }
+
+        AddOptionsForTopic(primaryTopic);
+
+        if (item.Data.supportedTopics != null)
+        {
+            for (int i = 0; i < item.Data.supportedTopics.Count; i++)
+            {
+                InspectionDeskClickTopic extra = item.Data.supportedTopics[i];
+                if (extra == primaryTopic)
+                    continue;
+
+                AddOptionsForTopic(extra);
+            }
+        }
+
+        AddOwnershipQuestionsForItem(item.Data, options, seenIds);
 
         if (options.Count == 0)
             return;
 
-        questionPopup?.ShowAtScreenPoint(canvas, null, screenPoint, BuildTopicTitle(topic), options, option =>
+        questionPopup?.ShowAtScreenPoint(canvas, eventCamera, screenPoint, BuildTopicTitle(primaryTopic), options, option =>
         {
             List<InspectionDeskItemState> spawned = new List<InspectionDeskItemState>();
-            string reply = currentPassenger.AnswerDeskQuestion(topic, option.id, currentFareTable, item.Data, spawned);
+            string reply = currentPassenger.AnswerDeskQuestion(primaryTopic, option.id, currentFareTable, item.Data, spawned);
 
             for (int i = 0; i < spawned.Count; i++)
                 SpawnItemInSharedTray(spawned[i]);
@@ -540,32 +729,71 @@ public sealed class InspectionDeskUI : MonoBehaviour
         }
     }
 
+    private void RefreshFloatSlots()
+    {
+        if (floatTrayZone == null)
+            return;
+
+        floatSlots = floatTrayZone.GetComponentsInChildren<InspectionDeskFloatSlot>(true);
+
+        if (!debugFloatSlots)
+            return;
+
+        if (floatSlots == null || floatSlots.Length == 0)
+        {
+            Debug.LogWarning("[DeskUI] No float slots found under FloatTrayZone.");
+            return;
+        }
+
+        for (int i = 0; i < floatSlots.Length; i++)
+        {
+            if (floatSlots[i] == null)
+                continue;
+
+            Debug.Log($"[DeskUI] Float slot found: {floatSlots[i].name} -> {floatSlots[i].DenominationPence}p");
+        }
+    }
+
     private void EnsureFloatTemplates()
     {
         if (itemPrefab == null || itemLayer == null || floatTrayZone == null)
             return;
 
-        bool hasTemplates = false;
-        for (int i = 0; i < runtimeItems.Count; i++)
-        {
-            if (runtimeItems[i] != null && runtimeItems[i].Data != null && runtimeItems[i].Data.isTemplateSource)
-            {
-                hasTemplates = true;
-                break;
-            }
-        }
+        RefreshFloatSlots();
 
-        if (hasTemplates)
-            return;
-
-        int[] values = currentFareTable != null ? currentFareTable.GetDenominationValuesDescending() : new[] { 2000, 1000, 500, 200, 100, 50, 20, 10, 5 };
+        // Force the desk float to always include the full supported UK set,
+        // regardless of what the FareTable asset currently contains.
+        int[] values = new[] { 2000, 1000, 500, 200, 100, 50, 20, 10, 5 };
 
         for (int i = 0; i < values.Length; i++)
         {
             int value = values[i];
+            string wantedId = $"float_template_{value}";
+
+            bool alreadyExists = false;
+
+            for (int j = 0; j < runtimeItems.Count; j++)
+            {
+                InspectionDeskItemView existing = runtimeItems[j];
+                if (existing == null || existing.Data == null)
+                    continue;
+
+                if (!existing.Data.isTemplateSource)
+                    continue;
+
+                if (existing.Data.uniqueId == wantedId)
+                {
+                    alreadyExists = true;
+                    break;
+                }
+            }
+
+            if (alreadyExists)
+                continue;
+
             InspectionDeskItemState state = new InspectionDeskItemState
             {
-                uniqueId = $"float_template_{value}",
+                uniqueId = wantedId,
                 kind = InspectionDeskItemKind.Cash,
                 title = currentFareTable != null ? currentFareTable.GetLabelForValue(value) : FareTable.FormatMoney(value),
                 subtitle = "Float",
@@ -574,10 +802,15 @@ public sealed class InspectionDeskUI : MonoBehaviour
                 isImportant = false,
                 isTemplateSource = true,
                 artKey = InspectionDeskArtLibrary.GetMoneyArtKey(value),
-                preferredSize = value >= 500 ? new Vector2(96f, 64f) : new Vector2(24f, 24f),
+                preferredSize = value >= 500 ? new Vector2(136f, 92f) : new Vector2(64f, 64f),
                 preferArtOnly = true,
                 defaultTopic = InspectionDeskClickTopic.Money,
-                supportedTopics = new List<InspectionDeskClickTopic> { InspectionDeskClickTopic.Money, InspectionDeskClickTopic.MoneyAmount, InspectionDeskClickTopic.MoneyAuthenticity }
+                supportedTopics = new List<InspectionDeskClickTopic>
+            {
+                InspectionDeskClickTopic.Money,
+                InspectionDeskClickTopic.MoneyAmount,
+                InspectionDeskClickTopic.MoneyAuthenticity
+            }
             };
 
             Vector2 pos = TryGetFloatSlotPosition(value, out Vector2 slotPos)
@@ -585,6 +818,9 @@ public sealed class InspectionDeskUI : MonoBehaviour
                 : floatTrayZone.GetRandomAnchoredPointWithin(itemLayer);
 
             SpawnView(state, pos);
+
+            if (debugFloatSlots)
+                Debug.Log($"[DeskUI] Spawned float template {wantedId} value={value} at {pos}");
         }
     }
 
@@ -592,18 +828,37 @@ public sealed class InspectionDeskUI : MonoBehaviour
     {
         anchoredPos = Vector2.zero;
 
+        RefreshFloatSlots();
+
         if (floatSlots == null || floatSlots.Length == 0 || itemLayer == null)
+        {
+            if (debugFloatSlots)
+                Debug.LogWarning($"[DeskUI] No float slots available for {valuePence}p.");
             return false;
+        }
 
         for (int i = 0; i < floatSlots.Length; i++)
         {
             InspectionDeskFloatSlot slot = floatSlots[i];
-            if (slot == null || slot.DenominationPence != valuePence)
+            if (slot == null)
+                continue;
+
+            if (debugFloatSlots)
+                Debug.Log($"[DeskUI] Checking slot {slot.name} value {slot.DenominationPence}p against {valuePence}p");
+
+            if (slot.DenominationPence != valuePence)
                 continue;
 
             anchoredPos = slot.GetAnchoredPointWithin(itemLayer);
+
+            if (debugFloatSlots)
+                Debug.Log($"[DeskUI] Matched slot {slot.name} for {valuePence}p at {anchoredPos}");
+
             return true;
         }
+
+        if (debugFloatSlots)
+            Debug.LogWarning($"[DeskUI] No matching float slot found for {valuePence}p. Falling back to random position.");
 
         return false;
     }
@@ -623,8 +878,17 @@ public sealed class InspectionDeskUI : MonoBehaviour
             return null;
 
         InspectionDeskItemView view = Instantiate(itemPrefab, itemLayer);
+
+        view.name = state != null && !string.IsNullOrWhiteSpace(state.uniqueId)
+            ? state.uniqueId
+            : "DeskItem";
+
         view.Initialise(this, canvas, state, anchoredPos);
         runtimeItems.Add(view);
+
+        if (debugFloatSlots)
+            Debug.Log($"[DeskUI] SpawnView -> {view.name}, value={state.moneyValuePence}, pos={anchoredPos}");
+
         return view;
     }
 
@@ -698,6 +962,28 @@ public sealed class InspectionDeskUI : MonoBehaviour
             Say(line);
     }
 
+    private void RemoveExistingIssuedTickets()
+    {
+        for (int i = runtimeItems.Count - 1; i >= 0; i--)
+        {
+            InspectionDeskItemView item = runtimeItems[i];
+            if (item == null || item.Data == null)
+                continue;
+
+            if (item.Data.kind != InspectionDeskItemKind.Ticket)
+                continue;
+
+            if (item.Data.isPassengerOwned)
+                continue;
+
+            if (item.Data.isEvidenceReference)
+                continue;
+
+            Destroy(item.gameObject);
+            runtimeItems.RemoveAt(i);
+        }
+    }
+
     private string BuildTopicTitle(InspectionDeskClickTopic topic)
     {
         return topic switch
@@ -720,6 +1006,144 @@ public sealed class InspectionDeskUI : MonoBehaviour
             InspectionDeskClickTopic.MissingId => "ID",
             InspectionDeskClickTopic.MissingTicket => "Ticket",
             InspectionDeskClickTopic.MissingPayment => "Payment",
+            _ => "Question"
+        };
+    }
+
+    private void AddOwnershipQuestionsForItem(InspectionDeskItemState item, List<InspectionDeskQuestionOption> options, HashSet<string> seenIds)
+    {
+        if (item == null || options == null || seenIds == null)
+            return;
+
+        void Add(string id, string label)
+        {
+            if (string.IsNullOrWhiteSpace(id) || seenIds.Contains(id))
+                return;
+
+            seenIds.Add(id);
+            options.Add(new InspectionDeskQuestionOption(id, label));
+        }
+
+        if (item.kind == InspectionDeskItemKind.IdCard)
+        {
+            Add("ownership_id", "Whose ID is this?");
+            Add("ownership_why_have_id", "Why have you got this ID?");
+        }
+        else if (item.kind == InspectionDeskItemKind.Ticket)
+        {
+            Add("ownership_ticket", "Is this ticket yours?");
+            Add("ownership_why_have_ticket", "Why have you got this ticket?");
+        }
+        else if (item.kind == InspectionDeskItemKind.Cash)
+        {
+            Add("ownership_money", "Is this all your money?");
+        }
+        else
+        {
+            Add("ownership_item", "Whose is this?");
+            Add("ownership_why_have_item", "Why have you got this?");
+        }
+    }
+
+    public void HandleZoneClick(InspectionDeskZoneBox zone, Vector2 screenPoint, Camera eventCamera)
+    {
+        if (zone == null || currentPassenger == null || questionPopup == null)
+            return;
+
+        questionPopup.Hide();
+
+        List<InspectionDeskQuestionOption> options = new List<InspectionDeskQuestionOption>();
+
+        if (zone.ZoneKind == InspectionDeskZoneKind.SharedTray)
+        {
+            bool hasPassengerId = false;
+            bool hasPassengerTicket = false;
+            int passengerMoneyTotal = 0;
+
+            for (int i = 0; i < runtimeItems.Count; i++)
+            {
+                InspectionDeskItemView view = runtimeItems[i];
+                if (view == null || view.Data == null)
+                    continue;
+
+                if (!view.Data.isPassengerOwned)
+                    continue;
+
+                if (!IsItemInsideZone(view, sharedTrayZone))
+                    continue;
+
+                switch (view.Data.kind)
+                {
+                    case InspectionDeskItemKind.IdCard:
+                        hasPassengerId = true;
+                        break;
+
+                    case InspectionDeskItemKind.Ticket:
+                        hasPassengerTicket = true;
+                        break;
+
+                    case InspectionDeskItemKind.Cash:
+                        passengerMoneyTotal += Mathf.Max(0, view.Data.moneyValuePence);
+                        break;
+                }
+            }
+
+            if (!hasPassengerId)
+                options.Add(new InspectionDeskQuestionOption("request_id", "Where's your ID?"));
+
+            if (currentPassenger.UsesDayRider && !hasPassengerTicket)
+                options.Add(new InspectionDeskQuestionOption("request_ticket", "Where's your ticket?"));
+
+            if (currentPassenger.UsesCash)
+            {
+                if (passengerMoneyTotal <= 0)
+                    options.Add(new InspectionDeskQuestionOption("request_payment", "Where's the payment?"));
+                else if (passengerMoneyTotal < currentPassenger.ExpectedFare)
+                    options.Add(new InspectionDeskQuestionOption("challenge_no_payment", "This isn't enough."));
+                else
+                    options.Add(new InspectionDeskQuestionOption("money_all", "Is this all you're paying?"));
+            }
+
+            options.Add(new InspectionDeskQuestionOption("ask_current_stop", "What's this stop?"));
+            options.Add(new InspectionDeskQuestionOption("ask_destination", "Where to?"));
+            options.Add(new InspectionDeskQuestionOption("ask_seat", "What seat are you in?"));
+            options.Add(new InspectionDeskQuestionOption("ask_fare", "How much are you paying?"));
+            options.Add(new InspectionDeskQuestionOption("generic_repeat", "Say that again."));
+        }
+        else if (zone.ZoneKind == InspectionDeskZoneKind.ReviewArea)
+        {
+            options.Add(new InspectionDeskQuestionOption("ask_current_stop", "What's this stop?"));
+            options.Add(new InspectionDeskQuestionOption("ask_destination", "Where to?"));
+            options.Add(new InspectionDeskQuestionOption("ask_seat", "What seat are you in?"));
+            options.Add(new InspectionDeskQuestionOption("ask_fare", "How much are you paying?"));
+            options.Add(new InspectionDeskQuestionOption("behaviour_repeat", "Answer me properly."));
+            options.Add(new InspectionDeskQuestionOption("behaviour_nervous", "Why are you acting strange?"));
+        }
+
+        if (options.Count == 0)
+            return;
+
+        questionPopup.ShowAtScreenPoint(canvas, eventCamera, screenPoint, BuildZoneTitle(zone.ZoneKind), options, option =>
+        {
+            List<InspectionDeskItemState> spawned = new List<InspectionDeskItemState>();
+            string reply = currentPassenger.AnswerDeskQuestion(InspectionDeskClickTopic.Generic, option.id, currentFareTable, null, spawned);
+
+            for (int i = 0; i < spawned.Count; i++)
+                SpawnItemInSharedTray(spawned[i]);
+
+            if (!string.IsNullOrWhiteSpace(reply))
+                Say(reply);
+        });
+    }
+
+    private string BuildZoneTitle(InspectionDeskZoneKind zoneKind)
+    {
+        return zoneKind switch
+        {
+            InspectionDeskZoneKind.SharedTray => "Shared Tray",
+            InspectionDeskZoneKind.FloatTray => "Float",
+            InspectionDeskZoneKind.Bin => "Bin",
+            InspectionDeskZoneKind.ReviewArea => "Desk",
             _ => "Question"
         };
     }

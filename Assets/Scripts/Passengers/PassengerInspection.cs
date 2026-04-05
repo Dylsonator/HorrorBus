@@ -71,7 +71,6 @@ public sealed class PassengerInspection : MonoBehaviour
         if (passenger == null)
             return;
 
-        // Reopen same active session without rebuilding desk items
         if (current != null && passenger == current)
         {
             viewOnlyPaused = false;
@@ -123,10 +122,18 @@ public sealed class PassengerInspection : MonoBehaviour
         if (current == null)
             return;
 
-        int notReturnedCount = deskUI != null ? deskUI.GetImportantPassengerItemsOutsideSharedTrayCount() : 0;
-        if (notReturnedCount > 0 && Random.value < rareReturnReminderChance)
+        int notReturnedPassengerItems = deskUI != null ? deskUI.GetImportantPassengerItemsOutsideSharedTrayCount() : 0;
+        int notReturnedIssuedTickets = deskUI != null ? deskUI.GetImportantIssuedTicketsOutsideSharedTrayCount() : 0;
+
+        if (notReturnedPassengerItems > 0 && Random.value < rareReturnReminderChance)
         {
             deskUI?.Say("Hang on - you still have my stuff.");
+            return;
+        }
+
+        if (notReturnedIssuedTickets > 0)
+        {
+            deskUI?.Say("You need to hand me the ticket first.");
             return;
         }
 

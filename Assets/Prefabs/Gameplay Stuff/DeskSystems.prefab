@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2201758315917907043}
   - component: {fileID: 6986760123901675784}
+  - component: {fileID: 4202907802985666014}
   m_Layer: 0
   m_Name: DeskSystems
   m_TagString: Untagged
@@ -60,3 +61,220 @@ MonoBehaviour:
   autoRegisterPassengerOnInspect: 1
   seatPassengerOnAccept: 1
   rareReturnReminderChance: 0.15
+--- !u!114 &4202907802985666014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3725003268781199105}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac73b84e967e5894a8838939b0f7d3b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  entries:
+  - key: money_10
+    baseSprite: {fileID: 21300000, guid: 7b17fa92f962f4b4ab1a5497979ada0b, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 38, y: 38}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_20
+    baseSprite: {fileID: 21300000, guid: 0803b44f61c9d2d4fac80336d9e4aa06, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 38, y: 38}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_50
+    baseSprite: {fileID: 21300000, guid: e5c1b8d671e026e4d9acb041c66ed996, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 38, y: 38}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_100
+    baseSprite: {fileID: 21300000, guid: c6aece99fc9ece4498491db9a7c97d7b, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 38, y: 38}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_500
+    baseSprite: {fileID: 21300000, guid: 9aa33f11687edf94da3cbd7b8692f968, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 20eb9ad9dd596b840b2633ceac307903, type: 3}
+    size: {x: 48, y: 34}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_1000
+    baseSprite: {fileID: 21300000, guid: 9aa33f11687edf94da3cbd7b8692f968, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 4989a46f40b96d94e926dc734c47a267, type: 3}
+    size: {x: 48, y: 34}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_2000
+    baseSprite: {fileID: 21300000, guid: 9aa33f11687edf94da3cbd7b8692f968, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 63d523619149582439b4e82e3c988b51, type: 3}
+    size: {x: 48, y: 34}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_real
+    baseSprite: {fileID: 21300000, guid: cb3f9c0b1284e2544bcfa29aa21dbd46, type: 3}
+    overlaySprite: {fileID: 21300000, guid: dc76756499c8b294db4f56e27c7a838a, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt1
+    baseSprite: {fileID: 21300000, guid: cb3f9c0b1284e2544bcfa29aa21dbd46, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 63d4a826d02a8a14785f008fc423adc3, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt2
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 22b19312ef255d14fb8eecd41bf0c65d, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt3
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 64ebab90f7ebb6a4eb5cd723bf07d599, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt4
+    baseSprite: {fileID: 21300000, guid: cb3f9c0b1284e2544bcfa29aa21dbd46, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f8ef702494784be43904a3feaf79740f, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt5
+    baseSprite: {fileID: 21300000, guid: cb3f9c0b1284e2544bcfa29aa21dbd46, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f9168904c952fda4f8154c880a5b5f5e, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt6
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: dc76756499c8b294db4f56e27c7a838a, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt7
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: c2a70d5259a86764cabe507a4ab2f91c, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt8
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 63d4a826d02a8a14785f008fc423adc3, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt9
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 22b19312ef255d14fb8eecd41bf0c65d, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt10
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f8ef702494784be43904a3feaf79740f, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt11
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f8ef702494784be43904a3feaf79740f, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt12
+    baseSprite: {fileID: 21300000, guid: 968a1221662337a4ca3aba03925831ff, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f9168904c952fda4f8154c880a5b5f5e, type: 3}
+    size: {x: 48, y: 34}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt13
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: dc76756499c8b294db4f56e27c7a838a, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt14
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: dc76756499c8b294db4f56e27c7a838a, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt15
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: c2a70d5259a86764cabe507a4ab2f91c, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt16
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 22b19312ef255d14fb8eecd41bf0c65d, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt17
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 63d4a826d02a8a14785f008fc423adc3, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt18
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: f8ef702494784be43904a3feaf79740f, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt19
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 64ebab90f7ebb6a4eb5cd723bf07d599, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_fake_alt20
+    baseSprite: {fileID: 21300000, guid: 5f06d2b2018595143932e51de7c9b3b9, type: 3}
+    overlaySprite: {fileID: 21300000, guid: 64ebab90f7ebb6a4eb5cd723bf07d599, type: 3}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: id_obvious_fake
+    baseSprite: {fileID: 21300000, guid: 087d39f9d7da05e49ba9bd3ddb9ba276, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 250, y: 170}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_5
+    baseSprite: {fileID: 21300000, guid: 20405acedb5f4f1488fb3d0eea0140c9, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 30, y: 30}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: money_200
+    baseSprite: {fileID: 21300000, guid: 5501706cc39c0e34c8d4ee87e2708b7c, type: 3}
+    overlaySprite: {fileID: 0}
+    size: {x: 30, y: 30}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: ticket_valid
+    baseSprite: {fileID: 21300000, guid: 0bc8d7a2fc36e0a48a0eeaff8a7a0f5d, type: 3}
+    overlaySprite: {fileID: 21300000, guid: a1fc650d2f77a4b4db07dc9dc2d0c64f, type: 3}
+    size: {x: 140, y: 80}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: ticket_old
+    baseSprite: {fileID: 21300000, guid: 0bc8d7a2fc36e0a48a0eeaff8a7a0f5d, type: 3}
+    overlaySprite: {fileID: 21300000, guid: a1fc650d2f77a4b4db07dc9dc2d0c64f, type: 3}
+    size: {x: 140, y: 80}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}
+  - key: ticket_fake
+    baseSprite: {fileID: 21300000, guid: 0bc8d7a2fc36e0a48a0eeaff8a7a0f5d, type: 3}
+    overlaySprite: {fileID: 21300000, guid: a1fc650d2f77a4b4db07dc9dc2d0c64f, type: 3}
+    size: {x: 140, y: 80}
+    hideText: 0
+    tint: {r: 0, g: 0, b: 0, a: 0}

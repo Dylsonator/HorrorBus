@@ -20,6 +20,11 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
     [SerializeField] private TMP_Text idNumberText;
     [SerializeField] private TMP_Text idExpiryText;
 
+    [Header("Optional Ticket slot texts")]
+    [SerializeField] private TMP_Text ticketTypeText;
+    [SerializeField] private TMP_Text ticketDateText;
+    [SerializeField] private TMP_Text ticketRouteText;
+
     private InspectionDeskUI owner;
     private RectTransform rect;
     private CanvasGroup canvasGroup;
@@ -97,20 +102,47 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
                 StretchChildToArtRoot(artOverlayImage.rectTransform);
             }
 
-            bool useIdSlots = Data != null &&
-                              Data.kind == InspectionDeskItemKind.IdCard &&
-                              !Data.preferArtOnly &&
-                              HasIdSlotTexts();
+            bool isRealIdCard = Data != null &&
+                                Data.kind == InspectionDeskItemKind.IdCard &&
+                                !Data.preferArtOnly;
+
+            bool isPrintedTicket = Data != null &&
+                                   Data.kind == InspectionDeskItemKind.Ticket &&
+                                   !Data.preferArtOnly;
+
+            bool useIdSlots = isRealIdCard && HasIdSlotTexts();
+            bool useTicketSlots = isPrintedTicket && HasTicketSlotTexts();
 
             if (useIdSlots)
             {
                 ApplyIdSlotTexts();
+                ClearTicketSlotTexts();
+                SetIdSlotTextsVisible(true);
+                SetTicketSlotTextsVisible(false);
+                SetGenericTextsVisible(false);
+            }
+            else if (useTicketSlots)
+            {
+                ApplyTicketSlotTexts();
+                ClearIdSlotTexts();
+                SetIdSlotTextsVisible(false);
+                SetTicketSlotTextsVisible(true);
+                SetGenericTextsVisible(false);
+            }
+            else if (isRealIdCard || isPrintedTicket)
+            {
+                ClearIdSlotTexts();
+                ClearTicketSlotTexts();
+                SetIdSlotTextsVisible(false);
+                SetTicketSlotTextsVisible(false);
                 SetGenericTextsVisible(false);
             }
             else
             {
                 ClearIdSlotTexts();
+                ClearTicketSlotTexts();
                 SetIdSlotTextsVisible(false);
+                SetTicketSlotTextsVisible(false);
 
                 if (titleText != null)
                 {
@@ -150,7 +182,9 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
         ApplySize(fallbackSize);
 
         ClearIdSlotTexts();
+        ClearTicketSlotTexts();
         SetIdSlotTextsVisible(false);
+        SetTicketSlotTextsVisible(false);
 
         if (background != null)
         {
@@ -177,6 +211,11 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
     private bool HasIdSlotTexts()
     {
         return idNameText != null || idDobText != null || idNumberText != null || idExpiryText != null;
+    }
+
+    private bool HasTicketSlotTexts()
+    {
+        return ticketTypeText != null || ticketDateText != null || ticketRouteText != null;
     }
 
     private void ApplyIdSlotTexts()
@@ -206,8 +245,25 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
         if (idDobText != null) idDobText.text = dob;
         if (idNumberText != null) idNumberText.text = idNumber;
         if (idExpiryText != null) idExpiryText.text = expiry;
+    }
 
-        SetIdSlotTextsVisible(true);
+    private void ApplyTicketSlotTexts()
+    {
+        string type = Data != null ? Data.title : string.Empty;
+        string date = string.Empty;
+        string route = string.Empty;
+
+        if (Data != null && !string.IsNullOrWhiteSpace(Data.subtitle))
+        {
+            string[] lines = Data.subtitle.Split('\n');
+
+            if (lines.Length > 0) date = lines[0].Trim();
+            if (lines.Length > 1) route = lines[1].Trim();
+        }
+
+        if (ticketTypeText != null) ticketTypeText.text = type;
+        if (ticketDateText != null) ticketDateText.text = date;
+        if (ticketRouteText != null) ticketRouteText.text = route;
     }
 
     private void ClearIdSlotTexts()
@@ -218,12 +274,26 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
         if (idExpiryText != null) idExpiryText.text = string.Empty;
     }
 
+    private void ClearTicketSlotTexts()
+    {
+        if (ticketTypeText != null) ticketTypeText.text = string.Empty;
+        if (ticketDateText != null) ticketDateText.text = string.Empty;
+        if (ticketRouteText != null) ticketRouteText.text = string.Empty;
+    }
+
     private void SetIdSlotTextsVisible(bool visible)
     {
         if (idNameText != null) idNameText.gameObject.SetActive(visible);
         if (idDobText != null) idDobText.gameObject.SetActive(visible);
         if (idNumberText != null) idNumberText.gameObject.SetActive(visible);
         if (idExpiryText != null) idExpiryText.gameObject.SetActive(visible);
+    }
+
+    private void SetTicketSlotTextsVisible(bool visible)
+    {
+        if (ticketTypeText != null) ticketTypeText.gameObject.SetActive(visible);
+        if (ticketDateText != null) ticketDateText.gameObject.SetActive(visible);
+        if (ticketRouteText != null) ticketRouteText.gameObject.SetActive(visible);
     }
 
     private void SetGenericTextsVisible(bool visible)
@@ -349,14 +419,16 @@ public sealed class InspectionDeskItemView : MonoBehaviour, IBeginDragHandler, I
         if (owner == null || dragging)
             return;
 
-        owner.HandleItemClick(this, eventData.position, null);
+        transform.SetAsLastSibling();
+        owner.HandleItemClick(this, eventData.position, eventData.pressEventCamera, null);
     }
 
-    public void NotifyRegionClicked(InspectionDeskClickTopic topic, Vector2 screenPoint)
+    public void NotifyRegionClicked(InspectionDeskClickTopic topic, Vector2 screenPoint, Camera eventCamera)
     {
         if (owner == null)
             return;
 
-        owner.HandleItemClick(this, screenPoint, topic);
+        transform.SetAsLastSibling();
+        owner.HandleItemClick(this, screenPoint, eventCamera, topic);
     }
 }

@@ -66,6 +66,13 @@ public class Passenger : MonoBehaviour
     [SerializeField] private string idNumber;
     [SerializeField] private string expiryDate;
 
+    [Header("Visible ID Identity (optional override)")]
+    [SerializeField] private bool useVisibleIdentityOverride;
+    [SerializeField] private string visiblePassengerName;
+    [SerializeField] private string visibleDateOfBirth;
+    [SerializeField] private string visibleIdNumber;
+    [SerializeField] private string visibleExpiryDate;
+
     [Header("Anomaly Flag (hidden)")]
     [SerializeField] private bool isAnomaly;
 
@@ -127,10 +134,18 @@ public class Passenger : MonoBehaviour
 
     public bool IsAnomaly => isAnomaly;
     public int DropOffStopIndex => dropOffStopIndex;
+
+    // Spoken / true identity
     public string PassengerName => passengerName;
     public string DateOfBirth => dateOfBirth;
     public string IdNumber => idNumber;
     public string ExpiryDate => expiryDate;
+
+    // Visible / card identity
+    public string VisiblePassengerName => useVisibleIdentityOverride && !string.IsNullOrWhiteSpace(visiblePassengerName) ? visiblePassengerName : passengerName;
+    public string VisibleDateOfBirth => useVisibleIdentityOverride && !string.IsNullOrWhiteSpace(visibleDateOfBirth) ? visibleDateOfBirth : dateOfBirth;
+    public string VisibleIdNumber => useVisibleIdentityOverride && !string.IsNullOrWhiteSpace(visibleIdNumber) ? visibleIdNumber : idNumber;
+    public string VisibleExpiryDate => useVisibleIdentityOverride && !string.IsNullOrWhiteSpace(visibleExpiryDate) ? visibleExpiryDate : expiryDate;
     public int StopsInfoA => actualStopsRemaining;
     public int StopsInfoB => claimedStopsRemaining;
     public StopInfoAccuracy StopsAccuracy => stopsInfoAccuracy;
@@ -252,7 +267,7 @@ public class Passenger : MonoBehaviour
             {
                 newItem = temp[0];
 
-                // Keep the rest marked as not spawned yet so the desk UI can spawn them too
+                // Leave the other cash items available so the desk UI can spawn them too.
                 for (int i = 1; i < temp.Count; i++)
                     spawnedDeskIds.Remove(temp[i].uniqueId);
 
@@ -264,7 +279,6 @@ public class Passenger : MonoBehaviour
                 return true;
             }
         }
-
 
         if (!deskTicketPresented && UsesDayRider)
         {
@@ -341,46 +355,77 @@ public class Passenger : MonoBehaviour
 
         output.Clear();
 
+        bool itemOwnedByPassenger = item != null && item.isPassengerOwned;
+        bool itemLooksSuspicious = item != null && (item.isFake || item.kind == InspectionDeskItemKind.Note || item.kind == InspectionDeskItemKind.Evidence);
+
         switch (topic)
         {
+            case InspectionDeskClickTopic.Generic:
+                AddGeneralConversationOptions(output);
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                output.Add(new InspectionDeskQuestionOption("generic_repeat", "Say that again."));
+                return;
+
             case InspectionDeskClickTopic.MissingId:
                 output.Add(new InspectionDeskQuestionOption("request_id", "Where's your ID?"));
                 output.Add(new InspectionDeskQuestionOption("challenge_no_id", "You need to show ID."));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.MissingTicket:
                 output.Add(new InspectionDeskQuestionOption("request_ticket", "Where's your ticket?"));
                 output.Add(new InspectionDeskQuestionOption("challenge_no_ticket", "You still need to show the pass."));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.MissingPayment:
                 output.Add(new InspectionDeskQuestionOption("request_payment", "Where's the payment?"));
                 output.Add(new InspectionDeskQuestionOption("challenge_no_payment", "You haven't paid."));
+                AddGeneralConversationOptions(output);
+                return;
+
+            case InspectionDeskClickTopic.IdCard:
+                output.Add(new InspectionDeskQuestionOption("photo_match", "You don't match the photo."));
+                output.Add(new InspectionDeskQuestionOption("name_repeat", "Say your full name."));
+                output.Add(new InspectionDeskQuestionOption("dob_repeat", "Tell me your date of birth."));
+                output.Add(new InspectionDeskQuestionOption("number_repeat", "Repeat your ID number."));
+                output.Add(new InspectionDeskQuestionOption("expiry_ask", "This ID looks expired."));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.IdPhoto:
                 output.Add(new InspectionDeskQuestionOption("photo_match", "This photo doesn't look right."));
                 output.Add(new InspectionDeskQuestionOption("photo_older", "You look different to this photo."));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.IdName:
                 output.Add(new InspectionDeskQuestionOption("name_repeat", "Say your full name."));
                 output.Add(new InspectionDeskQuestionOption("name_match", "Why doesn't this name match?"));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.IdDob:
                 output.Add(new InspectionDeskQuestionOption("dob_repeat", "Tell me your date of birth."));
                 output.Add(new InspectionDeskQuestionOption("dob_age", "You don't look that age."));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.IdExpiry:
                 output.Add(new InspectionDeskQuestionOption("expiry_ask", "This ID looks expired."));
                 output.Add(new InspectionDeskQuestionOption("expiry_still_valid", "Why should I accept this expiry?"));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.IdNumber:
                 output.Add(new InspectionDeskQuestionOption("number_repeat", "Repeat your ID number."));
                 output.Add(new InspectionDeskQuestionOption("number_replacement", "Is this a replacement card?"));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.Ticket:
@@ -388,6 +433,17 @@ public class Passenger : MonoBehaviour
                 output.Add(new InspectionDeskQuestionOption("ticket_valid", "This ticket looks off."));
                 output.Add(new InspectionDeskQuestionOption("ticket_date", "What day is this for?"));
                 output.Add(new InspectionDeskQuestionOption("ticket_route", "Is this even for this route?"));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
+                return;
+
+            case InspectionDeskClickTopic.TicketRoute:
+                output.Add(new InspectionDeskQuestionOption("ticket_route", "Is this even for this route?"));
+                output.Add(new InspectionDeskQuestionOption("ticket_valid", "This ticket looks off."));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.Money:
@@ -395,37 +451,73 @@ public class Passenger : MonoBehaviour
                 output.Add(new InspectionDeskQuestionOption("money_all", "Is this all you're paying?"));
                 output.Add(new InspectionDeskQuestionOption("money_exact", "Can you pay the exact fare?"));
                 output.Add(new InspectionDeskQuestionOption("money_already_paid", "You said you already paid?"));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.MoneyAuthenticity:
                 output.Add(new InspectionDeskQuestionOption("money_real", "Are you sure this money is real?"));
                 output.Add(new InspectionDeskQuestionOption("money_wrong_note", "Why does this note look wrong?"));
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.PassengerFace:
                 output.Add(new InspectionDeskQuestionOption("face_match", "You don't match the ID."));
                 output.Add(new InspectionDeskQuestionOption("face_twin", "You're saying that's your twin?"));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.PassengerHair:
                 output.Add(new InspectionDeskQuestionOption("hair_change", "Your hair doesn't match the photo."));
                 output.Add(new InspectionDeskQuestionOption("hair_recent", "Did you change your hair recently?"));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.PassengerClothes:
                 output.Add(new InspectionDeskQuestionOption("clothes_mismatch", "You don't look like this ID."));
                 output.Add(new InspectionDeskQuestionOption("clothes_copy", "These details don't line up."));
+                AddGeneralConversationOptions(output);
                 return;
 
             case InspectionDeskClickTopic.PassengerBehaviour:
                 output.Add(new InspectionDeskQuestionOption("behaviour_nervous", "Why are you acting strange?"));
                 output.Add(new InspectionDeskQuestionOption("behaviour_repeat", "Answer me properly."));
+                if (itemLooksSuspicious)
+                    AddOwnershipOptions(output);
+                AddGeneralConversationOptions(output);
                 return;
 
             default:
+                AddGeneralConversationOptions(output);
+                if (itemOwnedByPassenger)
+                    AddOwnershipOptions(output);
                 output.Add(new InspectionDeskQuestionOption("generic_repeat", "Say that again."));
                 return;
         }
+    }
+
+    private void AddGeneralConversationOptions(List<InspectionDeskQuestionOption> output)
+    {
+        if (output == null)
+            return;
+
+        output.Add(new InspectionDeskQuestionOption("ask_current_stop", "What's this stop?"));
+        output.Add(new InspectionDeskQuestionOption("ask_destination", "Where to?"));
+        output.Add(new InspectionDeskQuestionOption("ask_seat", "What seat are you in?"));
+        output.Add(new InspectionDeskQuestionOption("ask_fare", "How much are you paying?"));
+    }
+
+    private void AddOwnershipOptions(List<InspectionDeskQuestionOption> output)
+    {
+        if (output == null)
+            return;
+
+        output.Add(new InspectionDeskQuestionOption("who_item", "Whose is this?"));
+        output.Add(new InspectionDeskQuestionOption("why_have_item", "Why have you got this?"));
+        output.Add(new InspectionDeskQuestionOption("is_this_yours", "Is this even yours?"));
     }
 
     public string AnswerDeskQuestion(InspectionDeskClickTopic topic, string optionId, FareTable fareTable, InspectionDeskItemState clickedItem, List<InspectionDeskItemState> spawnedItems)
@@ -491,6 +583,15 @@ public class Passenger : MonoBehaviour
                 return tonePrefix + $"{passengerName}.";
 
             case "name_match":
+                if (useVisibleIdentityOverride && !string.Equals(VisiblePassengerName, passengerName, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return tonePrefix + Say(
+                        "That's not my name.",
+                        "No, that's wrong.",
+                        "That card isn't got my details on it."
+                    );
+                }
+
                 return tonePrefix + Say(
                     "That's my name.",
                     "It matches fine.",
@@ -501,6 +602,15 @@ public class Passenger : MonoBehaviour
                 return tonePrefix + $"{dateOfBirth}.";
 
             case "dob_age":
+                if (useVisibleIdentityOverride && !string.Equals(VisibleDateOfBirth, dateOfBirth, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return tonePrefix + Say(
+                        "That's not my birth date.",
+                        "No, that's wrong.",
+                        "That isn't my DOB."
+                    );
+                }
+
                 return tonePrefix + Say(
                     "People look older, don't they?",
                     "That's what it says.",
@@ -515,6 +625,15 @@ public class Passenger : MonoBehaviour
                 return tonePrefix + $"{idNumber}.";
 
             case "number_replacement":
+                if (useVisibleIdentityOverride && !string.Equals(VisibleIdNumber, idNumber, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return tonePrefix + Say(
+                        "That's not my number.",
+                        "No, that number's wrong.",
+                        "That isn't mine."
+                    );
+                }
+
                 return tonePrefix + Say(
                     "No, that's the card I've got.",
                     "It's just my card.",
@@ -562,6 +681,25 @@ public class Passenger : MonoBehaviour
                     "Can we get on with it?"
                 );
 
+            case "who_item":
+            case "is_this_yours":
+                return tonePrefix + RespondToOwnershipQuestion(clickedItem);
+
+            case "why_have_item":
+                return tonePrefix + RespondToWhyHaveItem(clickedItem);
+
+            case "ask_current_stop":
+                return tonePrefix + GetAnswer(PassengerQuestionType.CurrentStop);
+
+            case "ask_destination":
+                return tonePrefix + GetAnswer(PassengerQuestionType.DestinationStop);
+
+            case "ask_seat":
+                return tonePrefix + GetAnswer(PassengerQuestionType.Seat);
+
+            case "ask_fare":
+                return tonePrefix + GetAnswer(PassengerQuestionType.Fare);
+
             default:
                 return tonePrefix + Say("Same answer.", "I already told you.", "It's what I said.");
         }
@@ -593,10 +731,22 @@ public class Passenger : MonoBehaviour
 
     public void SetVisibleIdentity(string visibleName, string dob, string number, string expiry)
     {
-        passengerName = visibleName;
-        dateOfBirth = dob;
-        idNumber = number;
-        expiryDate = expiry;
+        useVisibleIdentityOverride = true;
+        visiblePassengerName = visibleName;
+        visibleDateOfBirth = dob;
+        visibleIdNumber = number;
+        visibleExpiryDate = expiry;
+        ResetDeskSession();
+    }
+
+    public void ClearVisibleIdentityOverride()
+    {
+        useVisibleIdentityOverride = false;
+        visiblePassengerName = string.Empty;
+        visibleDateOfBirth = string.Empty;
+        visibleIdNumber = string.Empty;
+        visibleExpiryDate = string.Empty;
+        ResetDeskSession();
     }
 
     public void CopyVisibleIdentityFrom(Passenger other)
@@ -604,7 +754,16 @@ public class Passenger : MonoBehaviour
         if (other == null || other == this)
             return;
 
-        SetVisibleIdentity(other.PassengerName, other.DateOfBirth, other.IdNumber, other.ExpiryDate);
+        SetVisibleIdentity(other.VisiblePassengerName, other.VisibleDateOfBirth, other.VisibleIdNumber, other.VisibleExpiryDate);
+    }
+
+    public void SetStolenIdentityFrom(Passenger victim)
+    {
+        if (victim == null || victim == this)
+            return;
+
+        SetVisibleIdentity(victim.VisiblePassengerName, victim.VisibleDateOfBirth, victim.VisibleIdNumber, victim.VisibleExpiryDate);
+        SetIdVisual(PassengerIdVisual.Real);
     }
 
     public void SetFare(int expected, int paid)
@@ -715,12 +874,109 @@ public class Passenger : MonoBehaviour
     {
         return questionType switch
         {
-            PassengerQuestionType.CurrentStop => Say($"We're at {GetCurrentStopName()}.", GetCurrentStopName()),
-            PassengerQuestionType.DestinationStop => Say($"I'm getting off at {GetPublicDestinationName()}.", GetPublicDestinationName()),
-            PassengerQuestionType.Seat => string.IsNullOrWhiteSpace(GetActualSeatName()) ? Say("I don't have a seat yet.", "Not seated yet.") : Say($"Seat {GetActualSeatName()}.", $"I'm in {GetActualSeatName()}."),
-            PassengerQuestionType.Fare => UsesDayRider ? BuildTicketStatusSummary() : $"I handed over {FareTable.FormatMoney(CashTenderedPence)}.",
+            PassengerQuestionType.CurrentStop => Say(
+                GetSpokenCurrentStopName(),
+                $"We're at {GetSpokenCurrentStopName()}.",
+                $"This stop is {GetSpokenCurrentStopName()}."
+            ),
+
+            PassengerQuestionType.DestinationStop => Say(
+                GetSpokenDestinationName(),
+                $"I'm getting off at {GetSpokenDestinationName()}.",
+                $"{GetSpokenDestinationName()}."
+            ),
+
+            PassengerQuestionType.Seat => string.IsNullOrWhiteSpace(GetActualSeatName())
+                ? Say("I don't have a seat yet.", "Not seated yet.", "Not sat down yet.")
+                : Say($"Seat {GetActualSeatName()}.", $"I'm in {GetActualSeatName()}.", $"{GetActualSeatName()}."),
+
+            PassengerQuestionType.Fare => UsesDayRider
+                ? BuildTicketStatusSummary()
+                : GetSpokenFareAnswer(),
+
             _ => "..."
         };
+    }
+
+    private string GetSpokenCurrentStopName()
+    {
+        if (RouteStops.Instance == null)
+            return "Unknown Stop";
+
+        int nextIndex = RouteStops.Instance.NextStopIndex;
+        int spokenIndex = nextIndex;
+
+        if (IsAnomaly)
+        {
+            switch (stopsInfoAccuracy)
+            {
+                case StopInfoAccuracy.Incorrect:
+                case StopInfoAccuracy.IntentionalLie:
+                    spokenIndex = Mathf.Max(0, nextIndex - Random.Range(1, 3));
+                    break;
+
+                case StopInfoAccuracy.AccidentalMistake:
+                    spokenIndex = Mathf.Max(0, nextIndex - 1);
+                    break;
+            }
+        }
+
+        return RouteStops.Instance.GetStopNameSafe(spokenIndex);
+    }
+
+    private string GetSpokenDestinationName()
+    {
+        if (RouteStops.Instance == null)
+            return GetPublicDestinationName();
+
+        if (!IsAnomaly)
+            return GetPublicDestinationName();
+
+        switch (stopsInfoAccuracy)
+        {
+            case StopInfoAccuracy.Incorrect:
+            case StopInfoAccuracy.IntentionalLie:
+                {
+                    int fakeIndex = Mathf.Clamp(dropOffStopIndex + Random.Range(-2, 3), 0, 999);
+                    if (fakeIndex == dropOffStopIndex)
+                        fakeIndex = Mathf.Max(0, dropOffStopIndex - 1);
+
+                    return RouteStops.Instance.GetDestinationName(fakeIndex);
+                }
+
+            case StopInfoAccuracy.AccidentalMistake:
+                {
+                    int offByOne = Mathf.Max(0, dropOffStopIndex - 1);
+                    return RouteStops.Instance.GetDestinationName(offByOne);
+                }
+
+            default:
+                return GetPublicDestinationName();
+        }
+    }
+
+    private string GetSpokenFareAnswer()
+    {
+        if (UsesDayRider)
+            return BuildTicketStatusSummary();
+
+        if (!IsAnomaly)
+            return $"I handed over {FareTable.FormatMoney(CashTenderedPence)}.";
+
+        if (CashTenderedPence < ExpectedFare)
+        {
+            return Say(
+                "That should cover it.",
+                "That's enough.",
+                "Yeah, that's the fare."
+            );
+        }
+
+        return Say(
+            $"I paid {FareTable.FormatMoney(Mathf.Max(0, CashTenderedPence - Random.Range(5, 30)))}.",
+            "That's what I've paid.",
+            "Should be right."
+        );
     }
 
     public string GetPaymentShortLabel()
@@ -799,16 +1055,20 @@ public class Passenger : MonoBehaviour
     private void AddIdItem(List<InspectionDeskItemState> output)
     {
         bool fakeId = idVisual != PassengerIdVisual.Real;
+        bool obviousFake = idVisual == PassengerIdVisual.ObviousFake;
 
         AddIfNotSpawned(output, new InspectionDeskItemState
         {
             uniqueId = "passenger_id",
             kind = InspectionDeskItemKind.IdCard,
-            title = passengerName,
-            subtitle = $"DOB {dateOfBirth}\nID {idNumber}\nEXP {expiryDate}",
+            title = VisiblePassengerName,
+            subtitle = $"DOB {VisibleDateOfBirth}\nID {VisibleIdNumber}\nEXP {VisibleExpiryDate}",
             artKey = InspectionDeskArtLibrary.GetIdArtKey(idVisual),
             preferredSize = new Vector2(160f, 96f),
-            preferArtOnly = fakeId,
+
+            // Real and subtle stolen IDs can show text. Only obvious fakes stay image-only.
+            preferArtOnly = obviousFake,
+
             isPassengerOwned = true,
             isImportant = true,
             isFake = fakeId,
@@ -880,11 +1140,11 @@ public class Passenger : MonoBehaviour
                 isFake = fake,
                 defaultTopic = InspectionDeskClickTopic.Money,
                 supportedTopics = new List<InspectionDeskClickTopic>
-                {
-                    InspectionDeskClickTopic.Money,
-                    InspectionDeskClickTopic.MoneyAmount,
-                    InspectionDeskClickTopic.MoneyAuthenticity
-                }
+            {
+                InspectionDeskClickTopic.Money,
+                InspectionDeskClickTopic.MoneyAmount,
+                InspectionDeskClickTopic.MoneyAuthenticity
+            }
             });
         }
     }
@@ -947,6 +1207,7 @@ public class Passenger : MonoBehaviour
         if (total <= 0)
             total = 5;
 
+        // Small chance to overpay with a bigger real denomination
         if (supported != null && supported.Length > 0 && total < 2000 && Random.value < 0.18f)
         {
             int[] big = { 2000, 1000, 500 };
@@ -1004,6 +1265,7 @@ public class Passenger : MonoBehaviour
             }
         }
 
+        // Round any odd remainder up to the smallest supported denomination.
         if (remaining > 0)
         {
             int smallest = supportedDescending[supportedDescending.Length - 1];
@@ -1028,6 +1290,13 @@ public class Passenger : MonoBehaviour
 
         while (fakeMoneyIndices.Count < count)
             fakeMoneyIndices.Add(Random.Range(0, runtimeTendered.Count));
+    }
+    public void CollectCurrentPaymentItems(List<InspectionDeskItemState> output)
+    {
+        if (output == null || !UsesCash)
+            return;
+
+        AddPaymentItems(output);
     }
 
     private string RespondToIdentityChallenge()
@@ -1110,6 +1379,76 @@ public class Passenger : MonoBehaviour
         );
     }
 
+    private string RespondToOwnershipQuestion(InspectionDeskItemState item)
+    {
+        if (item == null)
+            return Say("It's mine.", "Mine.", "That one's mine.");
+
+        bool visibleMismatch =
+            item.kind == InspectionDeskItemKind.IdCard &&
+            useVisibleIdentityOverride &&
+            (!string.Equals(VisiblePassengerName, passengerName, System.StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(VisibleDateOfBirth, dateOfBirth, System.StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(VisibleIdNumber, idNumber, System.StringComparison.OrdinalIgnoreCase));
+
+        if (IsAnomaly && (visibleMismatch || item.isFake))
+        {
+            return Say(
+                "It's mine. Just hand it back.",
+                "Yeah, mine. Problem?",
+                "Mine enough to use."
+            );
+        }
+
+        if (!item.isPassengerOwned)
+        {
+            return Say(
+                "That's yours, isn't it?",
+                "That one isn't mine.",
+                "I thought that was the driver's."
+            );
+        }
+
+        return Say(
+            "It's mine.",
+            "Yeah, that's mine.",
+            "Mine. I brought it with me."
+        );
+    }
+
+    private string RespondToWhyHaveItem(InspectionDeskItemState item)
+    {
+        if (item == null)
+            return Say("Because I need it.", "I brought it with me.", "It's for the journey.");
+
+        bool visibleMismatch =
+            item.kind == InspectionDeskItemKind.IdCard &&
+            useVisibleIdentityOverride &&
+            (!string.Equals(VisiblePassengerName, passengerName, System.StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(VisibleDateOfBirth, dateOfBirth, System.StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(VisibleIdNumber, idNumber, System.StringComparison.OrdinalIgnoreCase));
+
+        if (IsAnomaly && visibleMismatch)
+        {
+            return Say(
+                "I just picked it up in a rush.",
+                "Thought it was mine.",
+                "Grabbed the wrong one, didn't I?"
+            );
+        }
+
+        if (item.kind == InspectionDeskItemKind.Cash)
+            return Say("To pay the fare.", "Because I'm paying.", "It's my fare money.");
+
+        if (item.kind == InspectionDeskItemKind.Ticket)
+            return Say("For the bus.", "Because that's my ticket.", "It's my pass for the route.");
+
+        if (item.kind == InspectionDeskItemKind.IdCard)
+            return Say("Because that's my ID.", "I need it for boarding.", "It's my card.");
+
+        return Say("Because I brought it with me.", "It's mine to carry.", "Had it on me already.");
+    }
+
     private string GetStandingRepeatLine()
     {
         return Say(
@@ -1178,6 +1517,14 @@ public class Passenger : MonoBehaviour
             int year = 2027 + ((seed / 19) % 4);
             expiryDate = $"{day:00}/{month:00}/{year}";
         }
+
+        if (!useVisibleIdentityOverride)
+        {
+            visiblePassengerName = passengerName;
+            visibleDateOfBirth = dateOfBirth;
+            visibleIdNumber = idNumber;
+            visibleExpiryDate = expiryDate;
+        }
     }
 
     private static int[] CopyArray(int[] source)
@@ -1243,4 +1590,5 @@ public class Passenger : MonoBehaviour
         deskPaymentPresented = true;
         AddPaymentItems(output);
     }
+
 }
