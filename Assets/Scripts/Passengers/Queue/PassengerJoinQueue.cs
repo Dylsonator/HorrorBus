@@ -17,6 +17,13 @@ public sealed class PassengerJoinQueue : MonoBehaviour
     [SerializeField] private float blockCheckAhead = 0.7f;
     [SerializeField] private LayerMask passengerLayerMask = ~0;
 
+    [Header("Grounding")]
+    [SerializeField] private bool stickToGround = true;
+    [SerializeField] private float groundRayStartHeight = 2f;
+    [SerializeField] private float groundRayDistance = 6f;
+    [SerializeField] private float groundOffset = 0f;
+    [SerializeField] private LayerMask groundMask = ~0;
+
     private Passenger passenger;
     private QueueManagerNodes queue;
     private int requiredStopIndex = -1;
@@ -80,7 +87,6 @@ public sealed class PassengerJoinQueue : MonoBehaviour
 
         Vector3 pos = transform.position;
         Vector3 target = currentTarget;
-        target.y = pos.y;
 
         Vector3 to = target - pos;
         to.y = 0f;
@@ -101,11 +107,16 @@ public sealed class PassengerJoinQueue : MonoBehaviour
         if (waitIfBlocked && IsBlocked(pos, dir))
         {
             Face(dir);
+            if (stickToGround)
+                SnapToGround();
             return;
         }
 
         transform.position += dir * (moveSpeed * Time.deltaTime);
         Face(dir);
+
+        if (stickToGround)
+            SnapToGround();
     }
 
     private bool IsBlocked(Vector3 pos, Vector3 dir)
@@ -137,6 +148,18 @@ public sealed class PassengerJoinQueue : MonoBehaviour
         return false;
     }
 
+    private void SnapToGround()
+    {
+        Vector3 origin = transform.position + Vector3.up * groundRayStartHeight;
+
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, groundRayDistance, groundMask, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 p = transform.position;
+            p.y = hit.point.y + groundOffset;
+            transform.position = p;
+        }
+    }
+
     private void Face(Vector3 dir)
     {
         dir.y = 0f;
@@ -150,15 +173,21 @@ public sealed class PassengerJoinQueue : MonoBehaviour
 #if UNITY_EDITOR
     private void OnDrawGizmosSelected()
     {
-        if (!waitIfBlocked)
-            return;
+        if (waitIfBlocked)
+        {
+            Gizmos.color = new Color(1f, 0.6f, 0.1f, 0.25f);
+            Vector3 pos = transform.position + Vector3.up * 0.5f;
+            Vector3 dir = transform.forward;
+            Vector3 p = pos + dir * blockCheckAhead;
+            Gizmos.DrawSphere(p, blockRadius);
+        }
 
-        Gizmos.color = new Color(1f, 0.6f, 0.1f, 0.25f);
-
-        Vector3 pos = transform.position + Vector3.up * 0.5f;
-        Vector3 dir = transform.forward;
-        Vector3 p = pos + dir * blockCheckAhead;
-        Gizmos.DrawSphere(p, blockRadius);
+        if (stickToGround)
+        {
+            Gizmos.color = Color.cyan;
+            Vector3 origin = transform.position + Vector3.up * groundRayStartHeight;
+            Gizmos.DrawLine(origin, origin + Vector3.down * groundRayDistance);
+        }
     }
 #endif
 }

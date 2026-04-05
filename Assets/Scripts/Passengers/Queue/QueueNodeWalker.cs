@@ -12,6 +12,13 @@ public sealed class NodeQueueWalker : MonoBehaviour
     [SerializeField] private float slowDownDistance = 0.9f;
     [SerializeField] private float minimumMoveDistance = 0.04f;
 
+    [Header("Grounding")]
+    [SerializeField] private bool stickToGround = true;
+    [SerializeField] private float groundRayStartHeight = 2f;
+    [SerializeField] private float groundRayDistance = 6f;
+    [SerializeField] private float groundOffset = 0f;
+    [SerializeField] private LayerMask groundMask = ~0;
+
     private Vector3 targetPos;
     private Transform ahead;
     private float stopDistance = 0.7f;
@@ -85,12 +92,20 @@ public sealed class NodeQueueWalker : MonoBehaviour
         {
             speed = Mathf.MoveTowards(speed, 0f, deceleration * Time.deltaTime);
             Face(flatToAhead.sqrMagnitude > 0.0001f ? flatToAhead.normalized : transform.forward);
+
+            if (stickToGround)
+                SnapToGround();
+
             return;
         }
 
         if (distToTarget <= minimumMoveDistance)
         {
             speed = Mathf.MoveTowards(speed, 0f, deceleration * Time.deltaTime);
+
+            if (stickToGround)
+                SnapToGround();
+
             return;
         }
 
@@ -113,6 +128,21 @@ public sealed class NodeQueueWalker : MonoBehaviour
         transform.position += move;
 
         Face(dir);
+
+        if (stickToGround)
+            SnapToGround();
+    }
+
+    private void SnapToGround()
+    {
+        Vector3 origin = transform.position + Vector3.up * groundRayStartHeight;
+
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, groundRayDistance, groundMask, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 p = transform.position;
+            p.y = hit.point.y + groundOffset;
+            transform.position = p;
+        }
     }
 
     private void Face(Vector3 dir)
