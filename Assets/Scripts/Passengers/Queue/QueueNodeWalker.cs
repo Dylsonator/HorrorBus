@@ -16,8 +16,8 @@ public sealed class NodeQueueWalker : MonoBehaviour
     [SerializeField] private bool stickToGround = true;
     [SerializeField] private float groundRayStartHeight = 2f;
     [SerializeField] private float groundRayDistance = 6f;
-    [SerializeField] private float groundOffset = 0f;
-    [SerializeField] private LayerMask groundMask = ~0;
+    [SerializeField] private float groundOffset = 2f;
+    [SerializeField] private LayerMask groundMask = 0;
 
     private Vector3 targetPos;
     private Transform ahead;
@@ -28,6 +28,12 @@ public sealed class NodeQueueWalker : MonoBehaviour
 
     private QueueManagerNodes manager;
 
+
+    private void Awake()
+    {
+        if (groundMask == 0)
+            groundMask = LayerMask.GetMask("Terrain", "Bus");
+    }
     public void Init(QueueManagerNodes m)
     {
         manager = m;
