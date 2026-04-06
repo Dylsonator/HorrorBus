@@ -6,21 +6,14 @@ public sealed class WorldInspectViewerUI : MonoBehaviour
 {
     public static WorldInspectViewerUI Instance { get; private set; }
 
-    [Header("Root")]
     [SerializeField] private GameObject root;
-
-    [Header("Image")]
     [SerializeField] private Image displayImage;
-    [SerializeField] private bool preserveAspect = true;
-
-    [Header("Optional Text")]
     [SerializeField] private TMP_Text titleText;
-    [SerializeField] private TMP_Text bodyText;
-
-    [Header("Optional Hint Popup")]
-    [SerializeField] private GameObject hintRoot;
     [SerializeField] private TMP_Text hintText;
-    [SerializeField] private float hintDuration = 3f;
+    [SerializeField] private GameObject hintRoot;
+
+    [SerializeField] private bool preserveAspect = true;
+    [SerializeField] private float hintDuration = 4f;
 
     private float hintTimer;
     private bool isOpen;
@@ -34,24 +27,24 @@ public sealed class WorldInspectViewerUI : MonoBehaviour
         if (root == null)
             root = gameObject;
 
-        HideImmediate();
-        HideHintImmediate();
+        if (root != null)
+            root.SetActive(false);
+
+        if (hintRoot != null)
+            hintRoot.SetActive(false);
     }
 
     private void Update()
     {
-        if (isOpen && Input.GetKeyDown(KeyCode.Escape))
-            Hide();
-
         if (hintRoot != null && hintRoot.activeSelf)
         {
             hintTimer -= Time.unscaledDeltaTime;
             if (hintTimer <= 0f)
-                HideHintImmediate();
+                hintRoot.SetActive(false);
         }
     }
 
-    public void Show(Sprite sprite, string title = "", string body = "")
+    public void Show(Sprite sprite, string title = "")
     {
         if (root == null || displayImage == null)
             return;
@@ -69,12 +62,6 @@ public sealed class WorldInspectViewerUI : MonoBehaviour
             titleText.gameObject.SetActive(!string.IsNullOrWhiteSpace(title));
         }
 
-        if (bodyText != null)
-        {
-            bodyText.text = body;
-            bodyText.gameObject.SetActive(!string.IsNullOrWhiteSpace(body));
-        }
-
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         Time.timeScale = 0f;
@@ -86,33 +73,19 @@ public sealed class WorldInspectViewerUI : MonoBehaviour
             root.SetActive(false);
 
         isOpen = false;
-
         Time.timeScale = 1f;
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
-    public void ShowHint(string message)
+    public void ShowHint(string text)
     {
-        if (hintRoot == null || hintText == null || string.IsNullOrWhiteSpace(message))
+        if (hintRoot == null || hintText == null || string.IsNullOrWhiteSpace(text))
             return;
 
         hintRoot.SetActive(true);
-        hintText.text = message;
+        hintText.text = text;
         hintTimer = hintDuration;
-    }
-
-    public void HideImmediate()
-    {
-        if (root != null)
-            root.SetActive(false);
-
-        isOpen = false;
-    }
-
-    private void HideHintImmediate()
-    {
-        if (hintRoot != null)
-            hintRoot.SetActive(false);
     }
 }

@@ -55,6 +55,15 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
 
         retargetTimer -= Time.deltaTime;
 
+        // Hard gate: seat AI must never run before the passenger is actually seated.
+        if (!CanRunSeatTeleportLogic())
+        {
+            pending = false;
+            timer = 0f;
+            currentTarget = null;
+            return;
+        }
+
         // Freeze + cancel countdown when observed
         if (passenger.IsObserved)
         {
@@ -84,6 +93,27 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
         DebugAnomalyState();
     }
 
+    private bool CanRunSeatTeleportLogic()
+    {
+        if (passenger == null)
+            return false;
+
+        // Main fix: no seat behaviour at all until they are marked seated.
+        if (!passenger.IsSeatedPassenger)
+            return false;
+
+        var mgr = SeatManager.Instance;
+        if (mgr == null)
+            return false;
+
+        // Extra safety: they must actually belong to a real seat.
+        var currentSeat = mgr.GetSeatForPassenger(passenger);
+        if (currentSeat == null)
+            return false;
+
+        return true;
+    }
+
     private float PickDelaySeconds()
     {
         Vector2 range = passenger.IsAnomaly ? anomalyTeleportDelay : humanTeleportDelay;
@@ -97,11 +127,14 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
     private void TeleportAsHuman()
     {
         var mgr = SeatManager.Instance;
+        if (mgr == null) return;
+        if (!passenger.IsSeatedPassenger) return;
 
         Passenger nearestAnomaly = FindNearestAnomaly(passenger.transform.position, fearRadius);
         if (nearestAnomaly == null) return;
 
-        var mySeat = mgr.GetSeatForPassenger(passenger) ?? mgr.FindNearestSeat(passenger.transform.position);
+        // Only use the passenger's actual current seat.
+        var mySeat = mgr.GetSeatForPassenger(passenger);
         if (mySeat == null) return;
 
         // If blocked in: cannot move
@@ -188,9 +221,22 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
     private void TeleportAsAnomalyFollower()
     {
         var mgr = SeatManager.Instance;
+        if (mgr == null) return;
+        if (!passenger.IsSeatedPassenger) return;
+
+        // Only allow stalking once the anomaly itself is seated.
+        var mySeat = mgr.GetSeatForPassenger(passenger);
+        if (mySeat == null) return;
 
         EnsureTarget();
         if (currentTarget == null) return;
+
+        // Also refuse to stalk unseated targets.
+        if (!currentTarget.IsSeatedPassenger)
+        {
+            DebugAnomalyState("-> target not marked seated");
+            return;
+        }
 
         float d = Vector3.Distance(passenger.transform.position, currentTarget.transform.position);
         if (d > loseTargetRadius)
@@ -232,7 +278,6 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
             return;
         }
 
-        var mySeat = mgr.GetSeatForPassenger(passenger) ?? mgr.FindNearestSeat(passenger.transform.position);
         if (mySeat == best) return;
 
         if (debugAdjacency)
@@ -318,15 +363,24 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
             currentTarget = null;
         }
 
+        if (currentTarget != null && !currentTarget.IsSeatedPassenger)
+        {
+            DebugAnomalyState("-> target invalid (not seated), clearing");
+            currentTarget = null;
+        }
+
         if (currentTarget == null)
         {
             if (retargetTimer > 0f) return;
 
             var newTarget = FindNearestHuman(passenger.transform.position, acquireRadius);
+            if (newTarget != null && !newTarget.IsSeatedPassenger)
+                newTarget = null;
+
             currentTarget = newTarget;
             retargetTimer = retargetCooldown;
 
-            DebugAnomalyState(newTarget != null ? "-> acquired target" : "-> no target in range");
+            DebugAnomalyState(newTarget != null ? "-> acquired target" : "-> no seated target in range");
         }
     }
 
@@ -374,6 +428,7 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
         foreach (var p in PassengerRegistry.All)
         {
             if (p == null || !p.IsAnomaly) continue;
+            if (!p.IsSeatedPassenger) continue;
 
             float d = Vector3.Distance(pos, p.transform.position);
             if (d <= radius && d < bestD)
@@ -394,6 +449,7 @@ public class PassengerSeatTeleporterAI : MonoBehaviour
         foreach (var p in PassengerRegistry.All)
         {
             if (p == null || p.IsAnomaly) continue;
+            if (!p.IsSeatedPassenger) continue;
 
             float d = Vector3.Distance(pos, p.transform.position);
             if (d <= radius && d < bestD)

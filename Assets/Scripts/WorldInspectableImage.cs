@@ -2,23 +2,21 @@ using UnityEngine;
 
 public sealed class WorldInspectableImage : MonoBehaviour
 {
-    [Header("Content")]
     [SerializeField] private Sprite expandedSprite;
     [SerializeField] private string inspectTitle = "Inspect";
-    [SerializeField][TextArea] private string inspectBody;
 
     [Header("Hint")]
-    [SerializeField] private bool showHintOnStart = true;
-    [SerializeField][TextArea] private string hintMessage = "Click signs, maps, and passengers to inspect them. Press ESC to close.";
+    [SerializeField] private bool showHintOnce = true;
+    [SerializeField][TextArea] private string hintMessage = "You can click maps, notes, and passengers to inspect them. Press ESC to close.";
 
-    private bool hintShown;
+    private bool shownHint;
 
     private void Start()
     {
-        if (showHintOnStart && !hintShown && WorldInspectViewerUI.Instance != null)
+        if (showHintOnce && !shownHint && WorldInspectViewerUI.Instance != null)
         {
             WorldInspectViewerUI.Instance.ShowHint(hintMessage);
-            hintShown = true;
+            shownHint = true;
         }
     }
 
@@ -27,6 +25,6 @@ public sealed class WorldInspectableImage : MonoBehaviour
         if (WorldInspectViewerUI.Instance == null)
             return;
 
-        WorldInspectViewerUI.Instance.Show(expandedSprite, inspectTitle, inspectBody);
+        WorldInspectViewerUI.Instance.Show(expandedSprite, inspectTitle);
     }
 }

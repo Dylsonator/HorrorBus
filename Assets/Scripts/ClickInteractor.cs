@@ -20,13 +20,29 @@ public sealed class ClickInteractor : MonoBehaviour
         if (cam == null)
             return;
 
+        if (WorldInspectViewerUI.Instance != null && WorldInspectViewerUI.Instance.IsOpen)
+        {
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                WorldInspectViewerUI.Instance.Hide();
+
+            return;
+        }
+
         if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
             return;
+
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
+
         Ray r = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
         if (!Physics.Raycast(r, out RaycastHit hit, maxDistance, mask, QueryTriggerInteraction.Ignore))
             return;
+
+        if (hit.collider.TryGetComponent(out WorldInspectableImage inspectable))
+        {
+            inspectable.Inspect();
+            return;
+        }
 
         if (hit.collider.TryGetComponent(out PurgeButton purgeButton))
         {
