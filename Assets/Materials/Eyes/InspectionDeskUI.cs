@@ -131,6 +131,20 @@ public sealed class InspectionDeskUI : MonoBehaviour
 
     public void Open(Passenger passenger, DriverWallet wallet, FareTable fareTable)
     {
+        // Reopen same passenger = keep current desk exactly as it is.
+        if (currentPassenger != null && passenger == currentPassenger)
+        {
+            currentWallet = wallet;
+            currentFareTable = fareTable;
+            UpdateHeaderTexts();
+
+            if (root != null)
+                root.SetActive(true);
+
+            questionPopup?.Hide();
+            return;
+        }
+
         currentPassenger = passenger;
         currentWallet = wallet;
         currentFareTable = fareTable;
@@ -197,6 +211,25 @@ public sealed class InspectionDeskUI : MonoBehaviour
             root.SetActive(false);
     }
 
+    public List<InspectionDeskItemState> GetDeskItemsSnapshot()
+    {
+        List<InspectionDeskItemState> result = new List<InspectionDeskItemState>();
+
+        for (int i = 0; i < runtimeItems.Count; i++)
+        {
+            InspectionDeskItemView item = runtimeItems[i];
+            if (item == null || item.Data == null)
+                continue;
+
+            if (item.Data.isTemplateSource)
+                continue;
+
+            result.Add(item.Data.Clone());
+        }
+
+        return result;
+    }
+
     private void OnSeatPressed()
     {
         if (currentPassenger != null && !currentPassenger.IsAnomaly)
@@ -258,42 +291,19 @@ public sealed class InspectionDeskUI : MonoBehaviour
 
         string todayText = System.DateTime.Now.ToString("dd/MM/yyyy");
 
-        string title;
-        string dateLine;
-        string routeLine;
-
-        switch (band)
+        string title = band switch
         {
-            case TicketBand.Short:
-                title = "SHORT";
-                dateLine = todayText;
-                routeLine = "1-2 STOPS";
-                break;
+            TicketBand.Short => "SHORT",
+            TicketBand.Medium => "MEDIUM",
+            TicketBand.Long => "LONG",
+            TicketBand.DayRider => "DAYRIDER",
+            _ => "TICKET"
+        };
 
-            case TicketBand.Medium:
-                title = "MEDIUM";
-                dateLine = todayText;
-                routeLine = "3-4 STOPS";
-                break;
-
-            case TicketBand.Long:
-                title = "LONG";
-                dateLine = todayText;
-                routeLine = "5+ STOPS";
-                break;
-
-            case TicketBand.DayRider:
-                title = "DAYRIDER";
-                dateLine = todayText;
-                routeLine = "ALL DAY";
-                break;
-
-            default:
-                title = "TICKET";
-                dateLine = todayText;
-                routeLine = "ROUTE 4";
-                break;
-        }
+        string dateLine = todayText;
+        string routeLine = currentFareTable != null
+            ? currentFareTable.GetBandStopsLabel(band)
+            : (band == TicketBand.DayRider ? "ALL DAY" : "ROUTE");
 
         InspectionDeskItemState printed = new InspectionDeskItemState
         {
@@ -309,11 +319,11 @@ public sealed class InspectionDeskUI : MonoBehaviour
             preferArtOnly = false,
             defaultTopic = InspectionDeskClickTopic.Ticket,
             supportedTopics = new List<InspectionDeskClickTopic>
-            {
-                InspectionDeskClickTopic.Ticket,
-                InspectionDeskClickTopic.TicketValidity,
-                InspectionDeskClickTopic.TicketRoute
-            }
+        {
+            InspectionDeskClickTopic.Ticket,
+            InspectionDeskClickTopic.TicketValidity,
+            InspectionDeskClickTopic.TicketRoute
+        }
         };
 
         Vector2 pos = reviewAreaZone != null
@@ -761,8 +771,6 @@ public sealed class InspectionDeskUI : MonoBehaviour
 
         RefreshFloatSlots();
 
-        // Force the desk float to always include the full supported UK set,
-        // regardless of what the FareTable asset currently contains.
         int[] values = new[] { 2000, 1000, 500, 200, 100, 50, 20, 10, 5 };
 
         for (int i = 0; i < values.Length; i++)
@@ -806,11 +814,11 @@ public sealed class InspectionDeskUI : MonoBehaviour
                 preferArtOnly = true,
                 defaultTopic = InspectionDeskClickTopic.Money,
                 supportedTopics = new List<InspectionDeskClickTopic>
-            {
-                InspectionDeskClickTopic.Money,
-                InspectionDeskClickTopic.MoneyAmount,
-                InspectionDeskClickTopic.MoneyAuthenticity
-            }
+                {
+                    InspectionDeskClickTopic.Money,
+                    InspectionDeskClickTopic.MoneyAmount,
+                    InspectionDeskClickTopic.MoneyAuthenticity
+                }
             };
 
             Vector2 pos = TryGetFloatSlotPosition(value, out Vector2 slotPos)

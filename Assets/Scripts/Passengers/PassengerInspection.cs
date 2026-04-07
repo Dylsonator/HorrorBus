@@ -5,6 +5,7 @@ public sealed class PassengerInspection : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private InspectionDeskUI deskUI;
+    [SerializeField] private SeatedRequestionUI seatedRequestionUI;
     [SerializeField] private StopGate stopGate;
     [SerializeField] private ScoreManager scoreManager;
     [SerializeField] private CabinPeek cabinPeek;
@@ -27,6 +28,7 @@ public sealed class PassengerInspection : MonoBehaviour
 
     private Passenger current;
     private bool viewOnlyPaused;
+    private bool inSeatedMode;
 
     public Passenger Current => current;
     public bool HasOpenSession => current != null;
@@ -34,6 +36,7 @@ public sealed class PassengerInspection : MonoBehaviour
     private void Awake()
     {
         if (deskUI == null) deskUI = FindFirstObjectByType<InspectionDeskUI>(FindObjectsInactive.Include);
+        if (seatedRequestionUI == null) seatedRequestionUI = FindFirstObjectByType<SeatedRequestionUI>(FindObjectsInactive.Include);
         if (stopGate == null) stopGate = FindFirstObjectByType<StopGate>();
         if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
         if (cabinPeek == null) cabinPeek = FindFirstObjectByType<CabinPeek>();
@@ -46,6 +49,12 @@ public sealed class PassengerInspection : MonoBehaviour
             deskUI.SeatRequested += AcceptCurrent;
             deskUI.DenyRequested += DenyCurrent;
         }
+
+        if (seatedRequestionUI != null)
+        {
+            seatedRequestionUI.PassengerKickedOff += HandlePassengerKickedOff;
+            seatedRequestionUI.Closed += HandleSeatedUIClosed;
+        }
     }
 
     private void OnDestroy()
@@ -55,11 +64,21 @@ public sealed class PassengerInspection : MonoBehaviour
             deskUI.SeatRequested -= AcceptCurrent;
             deskUI.DenyRequested -= DenyCurrent;
         }
+
+        if (seatedRequestionUI != null)
+        {
+            seatedRequestionUI.PassengerKickedOff -= HandlePassengerKickedOff;
+            seatedRequestionUI.Closed -= HandleSeatedUIClosed;
+        }
     }
 
     private void Update()
     {
         if (current == null || viewOnlyPaused)
+            return;
+
+        // SeatedRequestionUI handles its own ESC close.
+        if (inSeatedMode)
             return;
 
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
@@ -71,19 +90,43 @@ public sealed class PassengerInspection : MonoBehaviour
         if (passenger == null)
             return;
 
+        // Clicking the same passenger again should just reopen the right UI.
         if (current != null && passenger == current)
         {
             viewOnlyPaused = false;
-            deskUI?.ShowExistingSession();
-            EnterInspectionMode();
+
+            if (inSeatedMode)
+            {
+                seatedRequestionUI?.Show(passenger);
+                EnterInspectionMode();
+            }
+            else
+            {
+                deskUI?.ShowExistingSession();
+                EnterInspectionMode();
+            }
+
             return;
         }
 
+        // Do not allow switching targets mid session.
         if (current != null && passenger != current)
             return;
 
         current = passenger;
         viewOnlyPaused = false;
+
+        // Seated passengers should never open the desk UI.
+        if (passenger.IsSeatedPassenger)
+        {
+            inSeatedMode = true;
+            deskUI?.HideViewOnly();
+            seatedRequestionUI?.Show(passenger);
+            EnterInspectionMode();
+            return;
+        }
+
+        inSeatedMode = false;
 
         FreezePassengerMovement(passenger);
 
@@ -98,7 +141,10 @@ public sealed class PassengerInspection : MonoBehaviour
     {
         current = null;
         viewOnlyPaused = false;
+        inSeatedMode = false;
+
         deskUI?.CloseAndForgetCurrent(false);
+        seatedRequestionUI?.Hide();
     }
 
     public void RegisterPendingPassenger(Passenger passenger)
@@ -114,12 +160,19 @@ public sealed class PassengerInspection : MonoBehaviour
         if (current == null)
             return;
 
-        deskUI?.AskLegacyQuestion(questionType);
+        if (inSeatedMode)
+            seatedRequestionUI?.AskLegacyQuestion(questionType);
+        else
+            deskUI?.AskLegacyQuestion(questionType);
     }
 
     public void AcceptCurrent()
     {
         if (current == null)
+            return;
+
+        // Seated passengers are not accepted through the boarding desk flow.
+        if (inSeatedMode)
             return;
 
         int notReturnedPassengerItems = deskUI != null ? deskUI.GetImportantPassengerItemsOutsideSharedTrayCount() : 0;
@@ -179,21 +232,57 @@ public sealed class PassengerInspection : MonoBehaviour
         Destroy(target.gameObject);
     }
 
+    private void HandlePassengerKickedOff(Passenger passenger)
+    {
+        if (passenger == null)
+            return;
+
+        if (current == passenger)
+        {
+            stopGate?.Resolve(passenger);
+            current = null;
+            viewOnlyPaused = false;
+            inSeatedMode = false;
+            ExitInspectionMode();
+        }
+    }
+
+    private void HandleSeatedUIClosed()
+    {
+        if (!inSeatedMode)
+            return;
+
+        current = null;
+        viewOnlyPaused = false;
+        inSeatedMode = false;
+        ExitInspectionMode();
+    }
+
     private void ResolveAndClose(bool accepted)
     {
         if (current != null)
             stopGate?.Resolve(current);
 
         deskUI?.CloseAndForgetCurrent(accepted);
+        seatedRequestionUI?.Hide();
+
         current = null;
         viewOnlyPaused = false;
+        inSeatedMode = false;
         ExitInspectionMode();
     }
 
     private void PauseInspectionAndResumeLook()
     {
         viewOnlyPaused = true;
-        deskUI?.HideViewOnly();
+
+        if (inSeatedMode)
+            seatedRequestionUI?.Hide();
+        else
+            deskUI?.HideViewOnly();
+
+        current = null;
+        inSeatedMode = false;
         ExitInspectionMode();
     }
 

@@ -1,4 +1,3 @@
-
 using System.Text;
 using UnityEngine;
 
@@ -38,7 +37,11 @@ public sealed class FareTable : ScriptableObject
         new Denomination { label = "5p",  valuePence = 5,    startingCount = 16 }
     };
 
+    public int ShortMaxStops => Mathf.Max(1, shortMaxStops);
+    public int MediumMaxStops => Mathf.Max(ShortMaxStops + 1, mediumMaxStops);
+
     public int GetFare(int stopsAhead) => GetBandFare(GetBandForStops(stopsAhead));
+
     public int GetBandFare(TicketBand band)
     {
         return band switch
@@ -54,11 +57,26 @@ public sealed class FareTable : ScriptableObject
     public TicketBand GetBandForStops(int stopsAhead)
     {
         stopsAhead = Mathf.Max(1, stopsAhead);
-        if (stopsAhead <= Mathf.Max(1, shortMaxStops))
+
+        if (stopsAhead <= ShortMaxStops)
             return TicketBand.Short;
-        if (stopsAhead <= Mathf.Max(shortMaxStops + 1, mediumMaxStops))
+
+        if (stopsAhead <= MediumMaxStops)
             return TicketBand.Medium;
+
         return TicketBand.Long;
+    }
+
+    public string GetBandStopsLabel(TicketBand band)
+    {
+        return band switch
+        {
+            TicketBand.Short => $"1-{ShortMaxStops} STOPS",
+            TicketBand.Medium => $"{ShortMaxStops + 1}-{MediumMaxStops} STOPS",
+            TicketBand.Long => $"{MediumMaxStops + 1}+ STOPS",
+            TicketBand.DayRider => "ALL DAY",
+            _ => "ROUTE"
+        };
     }
 
     public int GetDayRiderPrice() => Mathf.Max(0, dayRiderPricePence);
@@ -114,8 +132,8 @@ public sealed class FareTable : ScriptableObject
     public string BuildFareChartText()
     {
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine($"Short ({shortMaxStops} stop max): {FormatMoney(shortFarePence)}");
-        sb.AppendLine($"Medium ({mediumMaxStops} stop max): {FormatMoney(mediumFarePence)}");
+        sb.AppendLine($"Short ({ShortMaxStops} stop max): {FormatMoney(shortFarePence)}");
+        sb.AppendLine($"Medium ({MediumMaxStops} stop max): {FormatMoney(mediumFarePence)}");
         sb.AppendLine($"Long: {FormatMoney(longFarePence)}");
         sb.Append($"DayRider: {FormatMoney(dayRiderPricePence)}");
         return sb.ToString();

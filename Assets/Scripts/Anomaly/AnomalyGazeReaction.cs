@@ -25,7 +25,7 @@ public static class AnomalyGazeReaction
         Passenger anomaly,
         float radius = 7f,
         int minReactors = 1,
-        int maxReactors = 2)
+        int maxReactors = 4)
     {
         if (anomaly == null) return;
         GetRunner().StartCoroutine(DoReaction(anomaly, radius, minReactors, maxReactors));
@@ -57,9 +57,9 @@ public static class AnomalyGazeReaction
             (nearby[i], nearby[j]) = (nearby[j], nearby[i]);
         }
 
-        const float avoidSeconds = 1.2f;
-        const float glanceSeconds = 0.18f;
-        const float glanceChance = 0.20f;
+        float avoidSeconds = Random.Range(2f, 4.5f);
+        const float glanceSeconds = 0.22f;
+        const float glanceChance = 0.60f;
 
         // Humans react
         for (int i = 0; i < count; i++)

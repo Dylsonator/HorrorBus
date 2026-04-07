@@ -102,6 +102,14 @@ public sealed class PassengerSpawner : MonoBehaviour
             return;
         }
 
+        // Non-loop route: nobody boards at the final stop because there is nowhere ahead to go.
+        if (currentStopIndex >= stopCount - 1)
+        {
+            if (debugLogs)
+                Debug.Log("[Spawner] Final stop reached - skipping new passenger spawn for non-loop route.");
+            return;
+        }
+
         if (maxSpawnCount < minSpawnCount)
             maxSpawnCount = minSpawnCount;
 
@@ -181,6 +189,9 @@ public sealed class PassengerSpawner : MonoBehaviour
 
         for (int i = 0; i < toRemove.Count; i++)
             DismissPassenger(toRemove[i]);
+
+        if (SeatManager.Instance != null)
+            SeatManager.Instance.RebuildOccupancyFromHierarchy();
     }
 
     public bool SeatPassenger(Passenger p)
@@ -251,11 +262,22 @@ public sealed class PassengerSpawner : MonoBehaviour
         if (queueManager != null)
             queueManager.Remove(p);
 
+        if (SeatManager.Instance != null)
+            SeatManager.Instance.NotifyPassengerRemoved(p);
+
         activePassengers.Remove(p);
         seatedPassengers.Remove(p);
 
         if (decisionGate != null)
             decisionGate.Resolve(p);
+
+        PassengerJoinQueue join = p.GetComponent<PassengerJoinQueue>();
+        if (join != null)
+            Destroy(join);
+
+        NodeQueueWalker walker = p.GetComponent<NodeQueueWalker>();
+        if (walker != null)
+            walker.StopMoving();
 
         Destroy(p.gameObject);
 
@@ -369,39 +391,48 @@ public sealed class PassengerSpawner : MonoBehaviour
     private static Transform PickPoint(Transform[] points, int passengerNumberThisStop)
     {
         if (points == null || points.Length == 0) return null;
-        int idx = Mathf.Abs(passengerNumberThisStop) % points.Length;
-        return points[idx];
+        int index = Mathf.Clamp(passengerNumberThisStop, 0, points.Length - 1);
+        return points[index] != null ? points[index] : points[Random.Range(0, points.Length)];
     }
 
     private Passenger PickPrefab()
     {
-        bool wantAnomaly = Random.value < anomalyChance;
-        Passenger[] list = wantAnomaly ? anomalyPassengerPrefabs : normalPassengerPrefabs;
+        bool spawnAnomaly = anomalyPassengerPrefabs != null &&
+                            anomalyPassengerPrefabs.Length > 0 &&
+                            Random.value < anomalyChance;
 
-        if (list == null || list.Length == 0)
-            list = normalPassengerPrefabs;
+        Passenger[] pool = spawnAnomaly ? anomalyPassengerPrefabs : normalPassengerPrefabs;
+        if (pool == null || pool.Length == 0)
+            pool = normalPassengerPrefabs;
 
-        if (list == null || list.Length == 0)
+        if (pool == null || pool.Length == 0)
             return null;
 
-        return list[Random.Range(0, list.Length)];
+        return pool[Random.Range(0, pool.Length)];
     }
 
     private static int PickFutureStop(int currentStopIndex, int stopCount)
     {
-        int offset = Random.Range(1, stopCount);
-        return (currentStopIndex + offset) % stopCount;
+        // Non-loop route: only allow destinations strictly ahead on this run.
+        int maxAhead = (stopCount - 1) - currentStopIndex;
+        if (maxAhead <= 0)
+            return currentStopIndex;
+
+        int offset = Random.Range(1, maxAhead + 1);
+        return currentStopIndex + offset;
     }
 
     private static int StopsAhead(int currentStopIndex, int dropOffStopIndex, int stopCount)
     {
-        int dist = (dropOffStopIndex - currentStopIndex + stopCount) % stopCount;
-        return Mathf.Clamp(dist, 1, stopCount - 1);
+        // Non-loop route: no wraparound.
+        int dist = dropOffStopIndex - currentStopIndex;
+        return Mathf.Clamp(dist, 1, Mathf.Max(1, stopCount - 1));
     }
 
     private int PickClaimedStops(Passenger p, int trueStops, int stopCount, out Passenger.StopInfoAccuracy accuracy)
     {
         accuracy = Passenger.StopInfoAccuracy.Correct;
+
         if (p == null) return trueStops;
 
         if (!p.IsAnomaly)

@@ -58,7 +58,6 @@ public class PlayerGazeObserver : MonoBehaviour
         if (Physics.Raycast(camPos, dir, out hit, dist, occlusionMask, QueryTriggerInteraction.Ignore))
         {
             // Something blocks sight
-            Debug.Log($"LOS BLOCKED by {hit.collider.name} while looking at head {targetHead.name}");
             return false;
         }
 

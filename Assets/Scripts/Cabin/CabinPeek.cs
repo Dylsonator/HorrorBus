@@ -64,8 +64,6 @@ public sealed class CabinPeek : MonoBehaviour
 
         UpdateLean();
 
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-            SetCursorLocked(false);
     }
 
     public void SetLookEnabled(bool enabled)

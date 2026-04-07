@@ -18,10 +18,11 @@ public class CabinLook : MonoBehaviour
     [SerializeField] private float maxPitch = 35f;
 
     [Header("Cursor")]
-    [SerializeField] private bool lockCursor = true;
+    [SerializeField] private bool lockCursorOnStart = true;
 
     private float yaw;
     private float pitch;
+    private bool lookEnabled = true;
 
     public float Yaw => yaw;
     public float Pitch => pitch;
@@ -32,13 +33,15 @@ public class CabinLook : MonoBehaviour
         yaw = NormalizeAngle(euler.y);
         pitch = NormalizeAngle(euler.x);
 
-        if (lockCursor)
-            LockCursor(true);
+        if (lockCursorOnStart)
+            SetCursorLocked(true);
     }
 
     private void Update()
     {
-        // NEW Input System mouse delta (pixels since last frame)
+        if (!lookEnabled)
+            return;
+
         Vector2 mouseDelta = Vector2.zero;
         if (Mouse.current != null)
             mouseDelta = Mouse.current.delta.ReadValue();
@@ -50,15 +53,17 @@ public class CabinLook : MonoBehaviour
         pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
         transform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
-
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-            LockCursor(false);
     }
 
-    private void LockCursor(bool locked)
+    public void SetCursorLocked(bool locked)
     {
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
+    }
+
+    public void SetLookEnabled(bool enabled)
+    {
+        lookEnabled = enabled;
     }
 
     private static float NormalizeAngle(float degrees)

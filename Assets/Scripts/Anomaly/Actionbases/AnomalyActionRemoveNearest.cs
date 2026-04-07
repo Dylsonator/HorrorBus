@@ -5,14 +5,33 @@ public class AnomalyActionRemoveNearest : AnomalyActionBase
 {
     [SerializeField] private float radius = 6f;
 
+    [Header("Rules")]
+    [SerializeField] private bool seatedVictimsOnly = true;
+
     [Header("After kill")]
     [SerializeField, Range(0f, 1f)] private float takeVictimSeatChance = 0.6f;
     [SerializeField] private bool forceSwap = false; // normally false
 
     public override bool TryExecute(AnomalyController controller, Passenger self)
     {
-        var victim = PassengerUtil.FindNearest(self.transform.position, radius, exclude: self);
-        if (victim == null) return false;
+        if (self == null)
+            return false;
+
+        // If the killer itself is seated, never allow it to kill boarding / queue passengers.
+        bool requireSeatedVictim = seatedVictimsOnly || self.IsSeatedPassenger;
+
+        var victim = PassengerUtil.FindNearest(
+            self.transform.position,
+            radius,
+            exclude: self,
+            seatedOnly: requireSeatedVictim);
+
+        if (victim == null)
+            return false;
+
+        // Extra safety: do not kill unseated victims from a seated anomaly.
+        if (self.IsSeatedPassenger && !victim.IsSeatedPassenger)
+            return false;
 
         // Cache victim seat (if any) BEFORE destroy
         SeatAnchor victimSeat = null;

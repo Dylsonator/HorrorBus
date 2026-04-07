@@ -8,13 +8,12 @@ public sealed class RouteStops : MonoBehaviour
 
     public event Action ArrivedAtStop;
     public event Action LeavingStop;
+    public event Action FinalStopDeparted;
 
     [Header("References")]
     [SerializeField] private BusDrive busDrive;
-    [SerializeField] private BusSlowDown slowDown; // optional
+    [SerializeField] private BusSlowDown slowDown;
     [SerializeField] private PassengerSpawner passengerSpawner;
-    private bool stopTriggerArmed = true;
-
     [SerializeField] private StopGate decisionGate;
 
     [Header("Stops (0..1 along spline)")]
@@ -29,6 +28,7 @@ public sealed class RouteStops : MonoBehaviour
     private int nextStopIndex = 0;
     private bool waitingAtStop;
     private float resumeCooldownTimer;
+    private bool stopTriggerArmed = true;
 
     public bool WaitingAtStop => waitingAtStop;
     public int NextStopIndex => nextStopIndex;
@@ -139,7 +139,8 @@ public sealed class RouteStops : MonoBehaviour
         waitingAtStop = true;
         busDrive.SetSpeed(0f);
 
-        if (slowDown != null) slowDown.enabled = false;
+        if (slowDown != null)
+            slowDown.enabled = false;
 
         int arrivedIndex = nextStopIndex;
         int stopCount = stopTs.Length;
@@ -162,13 +163,21 @@ public sealed class RouteStops : MonoBehaviour
     {
         waitingAtStop = false;
 
+        int departedStopIndex = nextStopIndex;
+        bool departedFinalStop = stopTs != null && stopTs.Length > 0 && departedStopIndex == stopTs.Length - 1;
+
         nextStopIndex++;
         if (nextStopIndex >= stopTs.Length)
             nextStopIndex = 0;
 
-        if (slowDown != null) slowDown.enabled = true;
+        if (slowDown != null)
+            slowDown.enabled = true;
 
         LeavingStop?.Invoke();
+
+        if (departedFinalStop)
+            FinalStopDeparted?.Invoke();
+
         Debug.Log("Leaving stop.");
     }
 
